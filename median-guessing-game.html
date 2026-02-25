@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guess the Median</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e12;
+    --surface: #18181f;
+    --border: #2a2a35;
+    --accent: #f0c040;
+    --accent2: #60c8f0;
+    --text: #e8e8f0;
+    --muted: #888899;
+    --dot: #60c8f0;
+    --dot-left: #60c8f0;
+    --dot-right: #e86060;
+    --median-line: #f0c040;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+    margin-bottom: 4px;
+    text-align: center;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    width: 100%;
+    max-width: 720px;
+  }
+
+  .distribution-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  /* ---- DOT PLOT ---- */
+  .plot-wrapper {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    margin-bottom: 8px;
+  }
+
+  canvas#dotPlot {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* median drag line */
+  .drag-line {
+    position: absolute;
+    top: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--median-line);
+    border-radius: 2px;
+    cursor: ew-resize;
+    transform: translateX(-50%);
+    transition: box-shadow 0.15s;
+    touch-action: none;
+  }
+  .drag-line:hover, .drag-line.dragging {
+    box-shadow: 0 0 14px 4px #f0c04066;
+  }
+  .drag-line::after {
+    content: '◆';
+    position: absolute;
+    bottom: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .axis-line {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--border);
+    pointer-events: none;
+  }
+
+  /* x-axis labels */
+  .axis-labels {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 0.65rem;
+    margin-bottom: 24px;
+    padding: 0 2px;
+  }
+
+  /* ---- STATS ---- */
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .stat-box {
+    flex: 1;
+    min-width: 120px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+
+  .stat-box .label {
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+
+  .stat-box .value {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 800;
+  }
+
+  .stat-box.guess .value { color: var(--accent); }
+  .stat-box.left .value { color: var(--dot-left); }
+  .stat-box.right .value { color: var(--dot-right); }
+  .stat-box.result .value { color: var(--text); }
+
+  /* ---- FEEDBACK ---- */
+  .feedback {
+    margin-top: 20px;
+    padding: 16px 20px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    transition: opacity 0.3s;
+  }
+
+  .feedback-icon {
+    font-size: 1.8rem;
+    flex-shrink: 0;
+  }
+
+  .feedback.good { border-color: #40c070; }
+  .feedback.ok   { border-color: var(--accent); }
+  .feedback.bad  { border-color: #e86060; }
+
+  /* ---- BUTTONS ---- */
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  button:active { transform: scale(0.97); }
+
+  .btn-check {
+    background: var(--accent);
+    color: #0e0e12;
+    flex: 1;
+  }
+
+  .btn-new {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    flex: 1;
+  }
+  .btn-new:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .distribution-select {
+    margin-bottom: 16px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .dist-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .dist-btn:active { transform: scale(0.95); }
+  .dist-btn.active {
+    border-color: var(--accent2);
+    color: var(--accent2);
+    background: #60c8f015;
+  }
+</style>
+</head>
+<body>
+
+<h1>Guess the Median</h1>
+<p class="subtitle">Drag the line so ~50% of points fall on each side</p>
+
+<div class="card">
+  <div class="distribution-label">Distribution</div>
+  <div class="distribution-select" id="distButtons"></div>
+
+  <div class="plot-wrapper" id="plotWrapper">
+    <canvas id="dotPlot"></canvas>
+    <div class="axis-line"></div>
+    <div class="drag-line" id="dragLine"></div>
+  </div>
+  <div class="axis-labels" id="axisLabels"></div>
+
+  <div class="stats-row">
+    <div class="stat-box guess">
+      <div class="label">Your Guess</div>
+      <div class="value" id="guessVal">—</div>
+    </div>
+    <div class="stat-box left">
+      <div class="label">Left of Line</div>
+      <div class="value" id="leftVal">—</div>
+    </div>
+    <div class="stat-box right">
+      <div class="label">Right of Line</div>
+      <div class="value" id="rightVal">—</div>
+    </div>
+    <div class="stat-box result">
+      <div class="label">True Median</div>
+      <div class="value" id="trueMedian">?</div>
+    </div>
+  </div>
+
+  <div class="feedback" id="feedback">
+    <span class="feedback-icon">👆</span>
+    <span>Drag the <b style="color:var(--accent)">gold line</b> to where you think the median is, then click <b>Check</b>.</span>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-check" id="btnCheck">Check My Guess</button>
+    <button class="btn-new" id="btnNew">New Dataset ↻</button>
+  </div>
+</div>
+
+<script>
+const DISTRIBUTIONS = {
+  'Normal': () => normalSample(50, 15),
+  'Skewed Right': () => Math.abs(normalSample(0,1)) * 30 + 10,
+  'Skewed Left': () => 100 - Math.abs(normalSample(0,1)) * 30,
+  'Bimodal': () => Math.random() < 0.5 ? normalSample(30, 8) : normalSample(70, 8),
+  'Uniform': () => Math.random() * 80 + 10,
+};
+
+function normalSample(mean=0, std=1) {
+  let u, v;
+  do { u = Math.random(); } while(u === 0);
+  do { v = Math.random(); } while(v === 0);
+  return mean + std * Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+let currentDist = 'Normal';
+let data = [];
+let guessX = 0.5; // fraction [0,1] of plot width
+let checked = false;
+
+const canvas = document.getElementById('dotPlot');
+const ctx = canvas.getContext('2d');
+const dragLine = document.getElementById('dragLine');
+const plotWrapper = document.getElementById('plotWrapper');
+
+// Build dist buttons
+const distContainer = document.getElementById('distButtons');
+Object.keys(DISTRIBUTIONS).forEach(name => {
+  const btn = document.createElement('button');
+  btn.className = 'dist-btn' + (name === currentDist ? ' active' : '');
+  btn.textContent = name;
+  btn.onclick = () => {
+    currentDist = name;
+    distContainer.querySelectorAll('.dist-btn').forEach(b => b.classList.toggle('active', b === btn));
+    generateData();
+  };
+  distContainer.appendChild(btn);
+});
+
+function generateData() {
+  checked = false;
+  const n = 60 + Math.floor(Math.random() * 60);
+  const gen = DISTRIBUTIONS[currentDist];
+  data = Array.from({length: n}, gen).map(v => Math.max(0, Math.min(100, v)));
+  guessX = 0.5;
+  updateDragLine();
+  draw();
+  updateStats(false);
+  document.getElementById('feedback').className = 'feedback';
+  document.getElementById('feedback').innerHTML = `<span class="feedback-icon">👆</span><span>Drag the <b style="color:var(--accent)">gold line</b> to where you think the median is, then click <b>Check</b>.</span>`;
+  document.getElementById('trueMedian').textContent = '?';
+  document.getElementById('btnCheck').disabled = false;
+}
+
+function getDataMin() { return 0; }
+function getDataMax() { return 100; }
+
+function fractionToValue(f) {
+  return getDataMin() + f * (getDataMax() - getDataMin());
+}
+
+function valueToFraction(v) {
+  return (v - getDataMin()) / (getDataMax() - getDataMin());
+}
+
+function draw() {
+  const W = canvas.offsetWidth;
+  const H = canvas.offsetHeight;
+  canvas.width = W;
+  canvas.height = H;
+
+  const PAD = 12;
+  const plotW = W - 2 * PAD;
+
+  // Jitter dots into rows
+  const RADIUS = 6;
+  const DIAM = RADIUS * 2 + 2;
+  // bin data
+  const bins = 40;
+  const binW = plotW / bins;
+  const cols = Array.from({length: bins}, () => []);
+  
+  data.forEach(v => {
+    const f = (v - getDataMin()) / (getDataMax() - getDataMin());
+    const b = Math.min(bins - 1, Math.floor(f * bins));
+    cols[b].push(v);
+  });
+
+  // colorize based on guessX fraction
+  const guessValue = fractionToValue(guessX);
+
+  // draw dots
+  cols.forEach((pts, bi) => {
+    const cx = PAD + (bi + 0.5) * binW;
+    pts.forEach((v, row) => {
+      const cy = H - RADIUS - 2 - row * DIAM;
+      const isLeft = v < guessValue;
+      ctx.beginPath();
+      ctx.arc(cx, cy, RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = isLeft ? 'rgba(96,200,240,0.85)' : 'rgba(232,96,96,0.85)';
+      ctx.fill();
+    });
+  });
+
+  // axis ticks
+  ctx.strokeStyle = '#2a2a35';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 10; i++) {
+    const x = PAD + (i / 10) * plotW;
+    ctx.beginPath();
+    ctx.moveTo(x, H - 2);
+    ctx.lineTo(x, H - 8);
+    ctx.stroke();
+  }
+
+  // update axis labels
+  const labels = document.getElementById('axisLabels');
+  labels.innerHTML = '';
+  for (let i = 0; i <= 5; i++) {
+    const v = getDataMin() + (i / 5) * (getDataMax() - getDataMin());
+    const span = document.createElement('span');
+    span.textContent = Math.round(v);
+    labels.appendChild(span);
+  }
+}
+
+function updateDragLine() {
+  const W = plotWrapper.offsetWidth;
+  const PAD = 12;
+  const plotW = W - 2 * PAD;
+  const px = PAD + guessX * plotW;
+  dragLine.style.left = px + 'px';
+}
+
+function updateStats(showResult) {
+  const guessValue = fractionToValue(guessX);
+  const left = data.filter(v => v < guessValue).length;
+  const right = data.filter(v => v >= guessValue).length;
+
+  document.getElementById('guessVal').textContent = guessValue.toFixed(1);
+  document.getElementById('leftVal').textContent = left + ' (' + Math.round(100 * left / data.length) + '%)';
+  document.getElementById('rightVal').textContent = right + ' (' + Math.round(100 * right / data.length) + '%)';
+
+  if (showResult) {
+    const sorted = [...data].sort((a,b) => a - b);
+    const n = sorted.length;
+    const trueMed = n % 2 === 0 ? (sorted[n/2-1] + sorted[n/2]) / 2 : sorted[Math.floor(n/2)];
+    document.getElementById('trueMedian').textContent = trueMed.toFixed(1);
+
+    const leftPct = 100 * left / data.length;
+    const diff = Math.abs(leftPct - 50);
+    const fb = document.getElementById('feedback');
+
+    if (diff <= 5) {
+      fb.className = 'feedback good';
+      fb.innerHTML = `<span class="feedback-icon">🎯</span><span><b>${leftPct.toFixed(0)}%</b> of points are left of your line — that's <b style="color:#40c070">excellent!</b> The true median is <b>${trueMed.toFixed(1)}</b>.</span>`;
+    } else if (diff <= 12) {
+      fb.className = 'feedback ok';
+      fb.innerHTML = `<span class="feedback-icon">👍</span><span><b>${leftPct.toFixed(0)}%</b> left of line — close! Off by ~<b>${diff.toFixed(0)}%</b> from 50. True median: <b>${trueMed.toFixed(1)}</b>.</span>`;
+    } else {
+      fb.className = 'feedback bad';
+      fb.innerHTML = `<span class="feedback-icon">📉</span><span><b>${leftPct.toFixed(0)}%</b> left of line — ${leftPct < 50 ? 'slide right' : 'slide left'} to get closer to 50%. True median: <b>${trueMed.toFixed(1)}</b>.</span>`;
+    }
+  }
+}
+
+// Drag logic
+let dragging = false;
+
+function getPosFromEvent(e) {
+  const rect = plotWrapper.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  return clientX - rect.left;
+}
+
+dragLine.addEventListener('mousedown', e => { dragging = true; dragLine.classList.add('dragging'); e.preventDefault(); });
+dragLine.addEventListener('touchstart', e => { dragging = true; dragLine.classList.add('dragging'); e.preventDefault(); }, {passive:false});
+
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const W = plotWrapper.offsetWidth;
+  const PAD = 12;
+  const plotW = W - 2 * PAD;
+  const px = getPosFromEvent(e);
+  guessX = Math.max(0, Math.min(1, (px - PAD) / plotW));
+  updateDragLine();
+  draw();
+  updateStats(checked);
+});
+
+document.addEventListener('touchmove', e => {
+  if (!dragging) return;
+  const W = plotWrapper.offsetWidth;
+  const PAD = 12;
+  const plotW = W - 2 * PAD;
+  const px = getPosFromEvent(e);
+  guessX = Math.max(0, Math.min(1, (px - PAD) / plotW));
+  updateDragLine();
+  draw();
+  updateStats(checked);
+}, {passive:false});
+
+document.addEventListener('mouseup', () => { dragging = false; dragLine.classList.remove('dragging'); });
+document.addEventListener('touchend', () => { dragging = false; dragLine.classList.remove('dragging'); });
+
+document.getElementById('btnCheck').addEventListener('click', () => {
+  checked = true;
+  updateStats(true);
+  document.getElementById('btnCheck').disabled = true;
+});
+
+document.getElementById('btnNew').addEventListener('click', generateData);
+
+window.addEventListener('resize', () => {
+  updateDragLine();
+  draw();
+});
+
+generateData();
+</script>
+</body>
+</html>
