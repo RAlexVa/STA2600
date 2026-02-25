@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mean & Median — Lecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e12;
+    --surface: #18181f;
+    --border: #2a2a35;
+    --accent: #f0c040;
+    --accent2: #60c8f0;
+    --accent3: #c060f0;
+    --green: #40c070;
+    --red: #e86060;
+    --text: #e8e8f0;
+    --muted: #888899;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    overflow: hidden;
+  }
+
+  /* ---- SLIDE CONTAINER ---- */
+  .deck {
+    width: 100%; height: 100%;
+    position: relative;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 64px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.45s ease;
+  }
+
+  .slide.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* grid bg */
+  .slide::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.25;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .slide > * { position: relative; z-index: 1; }
+
+  /* ---- NAV ---- */
+  .nav {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 100;
+    background: #18181fcc;
+    border: 1px solid var(--border);
+    border-radius: 40px;
+    padding: 10px 20px;
+    backdrop-filter: blur(8px);
+  }
+
+  .nav button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+    font-family: 'Space Mono', monospace;
+  }
+  .nav button:hover { color: var(--text); background: var(--border); }
+  .nav button:disabled { opacity: 0.25; cursor: default; background: none; }
+
+  .dots {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+  }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: background 0.25s, transform 0.25s;
+    cursor: pointer;
+  }
+  .dot.active { background: var(--accent); transform: scale(1.4); }
+
+  .slide-counter {
+    font-size: 0.6rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    min-width: 36px;
+    text-align: center;
+  }
+
+  /* ---- SLIDE 1 — Opening Question ---- */
+  .s1-eyebrow {
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 20px;
+    text-align: center;
+  }
+
+  .s1-question {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.6rem, 3.5vw, 2.6rem);
+    font-weight: 900;
+    text-align: center;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    max-width: 780px;
+    margin-bottom: 48px;
+  }
+
+  .s1-question em { color: var(--accent); font-style: normal; }
+
+  .dist-compare {
+    display: flex;
+    gap: 32px;
+    align-items: flex-end;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .dist-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 24px;
+    text-align: center;
+    min-width: 260px;
+  }
+
+  .dist-box .dist-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .dist-box canvas { display: block; }
+
+  /* ---- SLIDE 2 — Learning Outcome ---- */
+  .s2-tag {
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent3);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .s2-tag::before, .s2-tag::after {
+    content: '';
+    width: 32px; height: 1px;
+    background: var(--accent3);
+    opacity: 0.5;
+  }
+
+  .s2-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1rem, 2vw, 1.2rem);
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 32px;
+    text-align: center;
+  }
+
+  .outcome-card {
+    background: var(--surface);
+    border: 1px solid var(--accent3);
+    border-radius: 16px;
+    padding: 36px 48px;
+    max-width: 680px;
+    text-align: center;
+    box-shadow: 0 0 60px #c060f015;
+  }
+
+  .outcome-text {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.2rem, 2.8vw, 1.9rem);
+    font-weight: 800;
+    line-height: 1.4;
+    letter-spacing: -0.02em;
+  }
+
+  .outcome-text .hl-mean   { color: var(--accent2); }
+  .outcome-text .hl-median { color: var(--accent); }
+
+  .outcome-sub {
+    margin-top: 20px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  /* ---- SLIDE 3 & 4 — Concept slides ---- */
+  .concept-layout {
+    display: flex;
+    gap: 48px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 1000px;
+    flex-wrap: wrap;
+  }
+
+  .concept-text { flex: 1; min-width: 240px; max-width: 340px; }
+
+  .concept-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .concept-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin-bottom: 20px;
+  }
+
+  .concept-body {
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+
+  .concept-body strong { color: var(--text); }
+
+  .concept-formula {
+    margin-top: 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+
+  .concept-formula .f-title {
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 6px;
+  }
+
+  .concept-formula .f-eq {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .concept-visual { flex: 1.2; min-width: 300px; }
+
+  .concept-canvas-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 20px 8px;
+  }
+
+  .concept-canvas-wrap canvas { display: block; width: 100%; }
+
+  .canvas-legend {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.62rem;
+    color: var(--muted);
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .legend-line {
+    width: 16px; height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ---- SLIDE 5 — Games ---- */
+  .s5-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .s5-sub {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  .games-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    width: 100%;
+    max-width: 760px;
+  }
+
+  .game-link {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-decoration: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .game-link:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+  .game-link.median:hover  { border-color: var(--accent); }
+  .game-link.balance:hover { border-color: var(--accent2); }
+
+  .gl-badge {
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 20px;
+    align-self: flex-start;
+    font-weight: 700;
+  }
+  .gl-badge.game { background: #ffffff0a; color: var(--muted); border: 1px solid var(--border); }
+  .gl-badge.test { background: #c060f015; color: var(--accent3); border: 1px solid #c060f044; }
+
+  .gl-icon { font-size: 1.4rem; }
+
+  .gl-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  .game-link.median  .gl-title { color: var(--accent); }
+  .game-link.balance .gl-title { color: var(--accent2); }
+
+  .gl-desc {
+    font-size: 0.67rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* ---- ANIMATIONS ---- */
+  @keyframes fadeIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+
+  .slide.active .anim-1 { animation: fadeIn 0.5s 0.1s ease both; }
+  .slide.active .anim-2 { animation: fadeIn 0.5s 0.25s ease both; }
+  .slide.active .anim-3 { animation: fadeIn 0.5s 0.4s ease both; }
+  .slide.active .anim-4 { animation: fadeIn 0.5s 0.55s ease both; }
+  .slide.active .anim-5 { animation: fadeIn 0.5s 0.7s ease both; }
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+  <!-- ======= SLIDE 1: Opening Question ======= -->
+  <div class="slide active" id="slide-0">
+    <p class="s1-eyebrow anim-1">Think about this...</p>
+    <h2 class="s1-question anim-2">For these two distributions,<br>where are the <em>mean</em> and <em>median</em>?<br>Are they in the same place?</h2>
+    <div class="dist-compare anim-3">
+      <div class="dist-box">
+        <div class="dist-label">Distribution A</div>
+        <canvas id="c-sym" width="260" height="120"></canvas>
+      </div>
+      <div class="dist-box">
+        <div class="dist-label">Distribution B</div>
+        <canvas id="c-skew" width="260" height="120"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= SLIDE 2: Learning Outcome ======= -->
+  <div class="slide" id="slide-1">
+    <div class="s2-tag anim-1">Learning Outcome</div>
+    <h2 class="s2-title anim-2">By the end of today you will be able to...</h2>
+    <div class="outcome-card anim-3">
+      <div class="outcome-text">
+        Visually identify where the
+        <span class="hl-mean">mean</span> and the
+        <span class="hl-median">median</span>
+        are located in a distribution
+      </div>
+      <div class="outcome-sub anim-4">
+        You'll practice this using interactive simulations — no formulas needed, just intuition.
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= SLIDE 3: Mean ======= -->
+  <div class="slide" id="slide-2">
+    <div class="concept-layout">
+      <div class="concept-text">
+        <div class="concept-label anim-1" style="color:var(--accent2)">Measure of centre</div>
+        <div class="concept-title anim-2" style="color:var(--accent2)">The<br>Mean</div>
+        <div class="concept-body anim-3">
+          The mean is the <strong>balance point</strong> of a distribution — like a seesaw perfectly in equilibrium.
+        </div>
+        <div class="concept-formula anim-4">
+          <div class="f-title" style="color:var(--accent2)">Formula</div>
+          <div class="f-eq">x̄ = Σxᵢ / n</div>
+          <div style="margin-top:6px; font-size:0.68rem;">Sum all values, divide by how many there are.</div>
+        </div>
+      </div>
+      <div class="concept-visual anim-3">
+        <div class="concept-canvas-wrap">
+          <canvas id="c-mean" height="160"></canvas>
+          <div class="canvas-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>Data points</div>
+            <div class="legend-item"><div class="legend-line" style="background:var(--accent2)"></div>Mean</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= SLIDE 4: Median ======= -->
+  <div class="slide" id="slide-3">
+    <div class="concept-layout">
+      <div class="concept-text">
+        <div class="concept-label anim-1" style="color:var(--accent)">Measure of centre</div>
+        <div class="concept-title anim-2" style="color:var(--accent)">The<br>Median</div>
+        <div class="concept-body anim-3">
+          The median is the <strong>middle value</strong> — exactly 50% of data points fall below it, and 50% above it.
+        </div>
+        <div class="concept-formula anim-4">
+          <div class="f-title" style="color:var(--accent)">Rule</div>
+          <div class="f-eq">50% | 50%</div>
+          <div style="margin-top:6px; font-size:0.68rem;">Sort all values. Pick the one in the middle.</div>
+        </div>
+      </div>
+      <div class="concept-visual anim-3">
+        <div class="concept-canvas-wrap">
+          <canvas id="c-median" height="160"></canvas>
+          <div class="canvas-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>Left half</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Right half</div>
+            <div class="legend-item"><div class="legend-line" style="background:var(--accent)"></div>Median</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= SLIDE 5: Games ======= -->
+  <div class="slide" id="slide-4">
+    <h2 class="s5-title anim-1">Now let's <span style="color:var(--accent)">practice</span></h2>
+    <p class="s5-sub anim-2">Start with the games to build intuition, then take the tests.</p>
+    <div class="games-grid anim-3">
+      <a class="game-link balance" href="balance-distribution.html" target="_blank">
+        <span class="gl-badge game">Game</span>
+        <span class="gl-icon">⚖️</span>
+        <div class="gl-title">Balance the Mean</div>
+        <p class="gl-desc">Find the balance point of the distribution. Drag the fulcrum to where the data is in equilibrium.</p>
+      </a>
+      <a class="game-link median" href="median-guessing-game.html" target="_blank">
+        <span class="gl-badge game">Game</span>
+        <span class="gl-icon">📊</span>
+        <div class="gl-title">Guess the Median</div>
+        <p class="gl-desc">Drag the line to split the distribution exactly in half. Practice with different shapes.</p>
+      </a>
+      <a class="game-link balance" href="balance-distribution-test.html" target="_blank">
+        <span class="gl-badge test">Test</span>
+        <span class="gl-icon">🏆</span>
+        <div class="gl-title">Mean Test</div>
+        <p class="gl-desc">3 random distributions. Score yourself — how well do you understand the mean?</p>
+      </a>
+      <a class="game-link median" href="median-test.html" target="_blank">
+        <span class="gl-badge test">Test</span>
+        <span class="gl-icon">🎯</span>
+        <div class="gl-title">Median Test</div>
+        <p class="gl-desc">3 random distributions. Score yourself — how well do you understand the median?</p>
+      </a>
+    </div>
+  </div>
+
+  <!-- ======= SLIDE 6: Outlier Question ======= -->
+  <div class="slide" id="slide-5">
+    <div style="width:100%;max-width:900px;display:flex;flex-direction:column;align-items:center;gap:24px;">
+      <p class="s1-eyebrow anim-1">Think about this...</p>
+      <h2 class="s1-question anim-2" style="margin-bottom:0;font-size:clamp(1.3rem,2.8vw,2rem);">
+        Both distributions show the same data.<br>Which one has a <em>higher mean</em>?
+      </h2>
+      <div class="dist-compare anim-3" style="width:100%;justify-content:center;gap:24px;">
+        <div class="dist-box" style="flex:1;min-width:280px;">
+          <div class="dist-label">Distribution A</div>
+          <canvas id="c-outlier" width="340" height="130"></canvas>
+          <div class="canvas-legend" style="margin-top:8px;">
+            <div class="legend-item"><div class="legend-line" style="background:var(--accent)"></div>Median</div>
+          </div>
+        </div>
+        <div class="dist-box" style="flex:1;min-width:280px;">
+          <div class="dist-label">Distribution B</div>
+          <canvas id="c-no-outlier" width="340" height="130"></canvas>
+          <div class="canvas-legend" style="margin-top:8px;">
+            <div class="legend-item"><div class="legend-line" style="background:var(--accent)"></div>Median</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= SLIDE 7: Summary / Takeaway ======= -->
+  <div class="slide" id="slide-6">
+    <div style="width:100%;max-width:820px;display:flex;flex-direction:column;align-items:center;gap:32px;">
+      <p class="s1-eyebrow anim-1">Key Takeaways</p>
+      <h2 class="s1-question anim-2" style="margin-bottom:0;font-size:clamp(1.4rem,3vw,2.2rem);">Two ways to describe the centre of a distribution</h2>
+      <div style="display:flex;gap:20px;width:100%;flex-wrap:wrap;" class="anim-3">
+
+        <!-- Mean card -->
+        <div style="flex:1;min-width:240px;background:var(--surface);border:1px solid var(--accent2);border-radius:16px;padding:28px 28px 24px;box-shadow:0 0 40px #60c8f010;">
+          <div style="font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--accent2);margin-bottom:10px;">The Mean</div>
+          <div style="font-family:'Syne',sans-serif;font-size:clamp(2rem,4vw,3rem);font-weight:900;color:var(--accent2);letter-spacing:-0.04em;line-height:1;margin-bottom:16px;">Balance<br>Point</div>
+          <div style="font-size:0.75rem;color:var(--muted);line-height:1.8;">
+            Imagine the distribution sitting on a seesaw. The mean is the exact point where it balances perfectly.
+          </div>
+          <div style="margin-top:16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:0.75rem;">
+            <span style="color:var(--accent2);font-weight:700;">x̄ = Σxᵢ / n</span>
+            <span style="color:var(--muted);margin-left:8px;">sum ÷ count</span>
+          </div>
+        </div>
+
+        <!-- Divider -->
+        <div style="display:flex;align-items:center;justify-content:center;color:var(--border);font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:900;padding:0 4px;">vs</div>
+
+        <!-- Median card -->
+        <div style="flex:1;min-width:240px;background:var(--surface);border:1px solid var(--accent);border-radius:16px;padding:28px 28px 24px;box-shadow:0 0 40px #f0c04010;">
+          <div style="font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;">The Median</div>
+          <div style="font-family:'Syne',sans-serif;font-size:clamp(2rem,4vw,3rem);font-weight:900;color:var(--accent);letter-spacing:-0.04em;line-height:1;margin-bottom:16px;">Middle<br>Point</div>
+          <div style="font-size:0.75rem;color:var(--muted);line-height:1.8;">
+            Sort all the values. The median is the one sitting exactly in the middle — half the data below, half above.
+          </div>
+          <div style="margin-top:16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:0.75rem;">
+            <span style="color:var(--accent);font-weight:700;">50% | 50%</span>
+            <span style="color:var(--muted);margin-left:8px;">equal split</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- NAV -->
+<div class="nav">
+  <button id="btnPrev" disabled>←</button>
+  <div class="dots" id="dots"></div>
+  <span class="slide-counter" id="counter">1 / 6</span>
+  <button id="btnNext">→</button>
+</div>
+
+<script>
+// ---- Slide logic ----
+const slides = document.querySelectorAll('.slide');
+const total  = slides.length;
+let current  = 0;
+
+const dotsEl   = document.getElementById('dots');
+const counter  = document.getElementById('counter');
+const btnPrev  = document.getElementById('btnPrev');
+const btnNext  = document.getElementById('btnNext');
+
+// Build dots
+slides.forEach((_, i) => {
+  const d = document.createElement('div');
+  d.className = 'dot' + (i === 0 ? ' active' : '');
+  d.addEventListener('click', () => goTo(i));
+  dotsEl.appendChild(d);
+});
+
+function goTo(n) {
+  slides[current].classList.remove('active');
+  dotsEl.children[current].classList.remove('active');
+  current = Math.max(0, Math.min(total - 1, n));
+  slides[current].classList.add('active');
+  dotsEl.children[current].classList.add('active');
+  counter.textContent = (current + 1) + ' / ' + total;
+  btnPrev.disabled = current === 0;
+  btnNext.disabled = current === total - 1;
+  if (current === 2) drawMean();
+  if (current === 3) drawMedian();
+  if (current === 5) drawSlide6();
+}
+
+btnPrev.addEventListener('click', () => goTo(current - 1));
+btnNext.addEventListener('click', () => goTo(current + 1));
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') goTo(current + 1);
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                     goTo(current - 1);
+});
+
+// ---- Helpers ----
+function normalSample(mean=0, std=1) {
+  let u, v;
+  do { u = Math.random(); } while(u === 0);
+  do { v = Math.random(); } while(v === 0);
+  return mean + std * Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function drawDotPlot(canvas, data, opts = {}) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || canvas.width;
+  const H = canvas.height;
+  canvas.width = W;
+  ctx.clearRect(0, 0, W, H);
+
+  const PAD = 10;
+  const plotW = W - 2 * PAD;
+  const RADIUS = opts.radius || 5;
+  const DIAM   = RADIUS * 2 + 2;
+  const bins   = 36;
+  const binW   = plotW / bins;
+  const cols   = Array.from({length: bins}, () => []);
+
+  const min = opts.min ?? 0;
+  const max = opts.max ?? 100;
+
+  data.forEach(v => {
+    const b = Math.min(bins - 1, Math.floor(((v - min) / (max - min)) * bins));
+    cols[b].push(v);
+  });
+
+  // color function
+  const colorFn = opts.colorFn || (() => 'rgba(96,200,240,0.85)');
+
+  cols.forEach((pts, bi) => {
+    const cx = PAD + (bi + 0.5) * binW;
+    pts.forEach((v, row) => {
+      const cy = H - RADIUS - 4 - row * DIAM;
+      ctx.beginPath();
+      ctx.arc(cx, cy, RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = colorFn(v);
+      ctx.fill();
+    });
+  });
+
+  // vertical lines
+  if (opts.lines) {
+    opts.lines.forEach(({value, color, label}) => {
+      const x = PAD + ((value - min) / (max - min)) * plotW;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H - 2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      if (label) {
+        ctx.font = `bold 11px 'Space Mono', monospace`;
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.fillText(label, x, 14);
+      }
+    });
+  }
+}
+
+// ---- Slide 1: two static mini distributions ----
+function drawSlide1() {
+  // Symmetric
+  const sym  = Array.from({length:80}, () => clamp(normalSample(50,13),5,95));
+  // Skewed right
+  const skew = Array.from({length:80}, () => clamp(Math.abs(normalSample(0,1))*28+8, 2, 95));
+
+  const cs = document.getElementById('c-sym');
+  const ck = document.getElementById('c-skew');
+  cs.width = cs.offsetWidth || 260;
+  ck.width = ck.offsetWidth || 260;
+
+  drawDotPlot(cs, sym,  {min:0, max:100, radius:4});
+  drawDotPlot(ck, skew, {min:0, max:100, radius:4});
+}
+
+// ---- Slide 3: Mean ----
+let sharedData = [];
+function getSharedData() {
+  if (!sharedData.length) {
+    sharedData = Array.from({length:70}, () => clamp(normalSample(50, 14), 5, 90));
+  }
+  return sharedData;
+}
+
+function drawMean() {
+  const data = getSharedData();
+  const mean = data.reduce((a,b) => a+b, 0) / data.length;
+  const c = document.getElementById('c-mean');
+  c.width = c.offsetWidth || 400;
+  drawDotPlot(c, data, {
+    min:0, max:100, radius:5,
+    colorFn: () => 'rgba(96,200,240,0.8)',
+    lines: [{value: mean, color: 'var(--accent2)', label: 'x̄'}]
+  });
+}
+
+// ---- Slide 4: Median ----
+function drawMedian() {
+  const data = getSharedData();
+  const sorted = [...data].sort((a,b) => a-b);
+  const n = sorted.length;
+  const med = n % 2 === 0 ? (sorted[n/2-1]+sorted[n/2])/2 : sorted[Math.floor(n/2)];
+  const c = document.getElementById('c-median');
+  c.width = c.offsetWidth || 400;
+  drawDotPlot(c, data, {
+    min:0, max:100, radius:5,
+    colorFn: v => v < med ? 'rgba(96,200,240,0.8)' : 'rgba(232,96,96,0.8)',
+    lines: [{value: med, color: 'var(--accent)', label: 'M'}]
+  });
+}
+
+// ---- Slide 6: Outlier comparison ----
+let baseData = [];
+function drawSlide6() {
+  if (!baseData.length) {
+    baseData = Array.from({length:55}, () => clamp(normalSample(40, 10), 5, 65));
+  }
+  const withOutlier = [...baseData, 95, 97, 94]; // 3 very visible outliers on the right
+
+  function getMedian(arr) {
+    const s = [...arr].sort((a,b) => a-b);
+    const n = s.length;
+    return n % 2 === 0 ? (s[n/2-1]+s[n/2])/2 : s[Math.floor(n/2)];
+  }
+
+  const medA = getMedian(withOutlier);
+  const medB = getMedian(baseData);
+
+  const cA = document.getElementById('c-outlier');
+  const cB = document.getElementById('c-no-outlier');
+  cA.width = cA.offsetWidth || 340;
+  cB.width = cB.offsetWidth || 340;
+
+  drawDotPlot(cA, withOutlier, {
+    min:0, max:100, radius:5,
+    colorFn: v => v > 80 ? 'rgba(240,100,60,0.95)' : 'rgba(96,200,240,0.8)',
+    lines: [{value: medA, color: 'var(--accent)', label: 'M'}]
+  });
+
+  drawDotPlot(cB, baseData, {
+    min:0, max:100, radius:5,
+    colorFn: () => 'rgba(96,200,240,0.8)',
+    lines: [{value: medB, color: 'var(--accent)', label: 'M'}]
+  });
+}
+
+// Draw slide 1 on load, after fonts
+window.addEventListener('load', () => {
+  setTimeout(drawSlide1, 100);
+});
+
+window.addEventListener('resize', () => {
+  drawSlide1();
+  if (current === 2) drawMean();
+  if (current === 3) drawMedian();
+  if (current === 5) drawSlide6();
+});
+</script>
+</body>
+</html>
