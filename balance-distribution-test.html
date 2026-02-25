@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mean Estimation Test</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e12;
+    --surface: #18181f;
+    --bar: #2a2a36;
+    --accent: #f0c040;
+    --accent2: #e05c5c;
+    --text: #e8e8f0;
+    --muted: #6a6a7a;
+    --success: #4ecf88;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  .noise {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.4;
+  }
+
+  .container {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 720px;
+    display: flex; flex-direction: column; gap: 1.5rem;
+  }
+
+  /* ---- SCREENS ---- */
+  .screen { display: none; flex-direction: column; gap: 1.5rem; }
+  .screen.active { display: flex; }
+
+  /* Header */
+  header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+
+  h1 {
+    font-size: clamp(1.8rem, 4.5vw, 2.8rem);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+  }
+  h1 span { color: var(--accent); }
+
+  /* Trial dots */
+  .trial-tracker {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4rem;
+  }
+
+  .trial-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .trial-dots {
+    display: flex;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid var(--muted);
+    background: transparent;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .dot.current { border-color: var(--accent); }
+  .dot.done-good { background: var(--success); border-color: var(--success); }
+  .dot.done-close { background: var(--accent); border-color: var(--accent); }
+  .dot.done-far { background: var(--accent2); border-color: var(--accent2); }
+
+  /* Chart */
+  .chart-wrap {
+    background: var(--surface);
+    border-radius: 4px;
+    padding: 1.5rem 1.5rem 0;
+    border: 1px solid #25252f;
+    position: relative;
+    overflow: hidden;
+  }
+  .chart-wrap::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.8s ease;
+  }
+  .chart-wrap.loaded::before { transform: scaleX(1); }
+
+  canvas#distCanvas {
+    display: block;
+    width: 100%;
+    height: 200px;
+  }
+
+  /* Slider zone */
+  .slider-zone {
+    position: relative;
+    padding: 1rem 1.5rem 1.5rem;
+    background: var(--surface);
+    border: 1px solid #25252f;
+    border-radius: 4px;
+  }
+
+  .slider-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .slider-label .value { color: var(--accent); }
+
+  .slider-container {
+    position: relative;
+    height: 40px;
+    display: flex;
+    align-items: center;
+  }
+
+  .track {
+    width: 100%;
+    height: 4px;
+    background: var(--bar);
+    border-radius: 2px;
+    position: relative;
+  }
+
+  .track-fill {
+    position: absolute;
+    left: 0;
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.05s;
+  }
+
+  input[type=range] {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    margin: 0;
+    z-index: 2;
+  }
+
+  .thumb {
+    position: absolute;
+    width: 22px; height: 22px;
+    background: var(--bg);
+    border: 3px solid var(--accent);
+    border-radius: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .thumb.active { box-shadow: 0 0 0 8px rgba(240,192,64,0.15); }
+
+  /* Balance beam — hidden until answer */
+  .beam-wrap {
+    margin-top: 1rem;
+    position: relative;
+    height: 70px;
+    overflow: hidden;
+    transition: max-height 0.5s ease, opacity 0.5s ease, margin 0.5s ease;
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+  }
+  .beam-wrap.visible {
+    max-height: 80px;
+    opacity: 1;
+    margin-top: 1rem;
+  }
+
+  .beam-scene {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .beam {
+    width: 80%;
+    height: 6px;
+    background: var(--bar);
+    border-radius: 3px;
+    transform-origin: center;
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s;
+  }
+  .beam.balanced { background: var(--success); }
+  .beam.close { background: var(--accent); }
+  .beam.far { background: var(--accent2); }
+
+  .beam-fulcrum {
+    width: 0; height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 18px solid #25252f;
+  }
+
+  .beam-weights {
+    position: absolute;
+    top: -28px;
+    width: 80%;
+    left: 10%;
+    pointer-events: none;
+  }
+
+  .weight-marker {
+    position: absolute;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .weight-circle {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid;
+  }
+  .weight-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  .weight-mean { border-color: var(--success); background: rgba(78,207,136,0.2); }
+  .weight-user { border-color: var(--accent); background: rgba(240,192,64,0.2); }
+
+  /* Result for each trial */
+  .result {
+    min-height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .result-msg {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .result-msg.show { opacity: 1; }
+  .result-msg.good { color: var(--success); }
+  .result-msg.close { color: var(--accent); }
+  .result-msg.far { color: var(--accent2); }
+
+  .result-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.6;
+  }
+
+  /* Buttons */
+  .btn {
+    background: transparent;
+    border: 1.5px solid var(--muted);
+    color: var(--muted);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.5rem 1.2rem;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .confirm-btn {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 800;
+    font-size: 0.85rem;
+    padding: 0.7rem 1.8rem;
+    width: 100%;
+    transition: opacity 0.2s;
+  }
+  .confirm-btn:hover { opacity: 0.85; color: var(--bg); border-color: var(--accent); }
+  .confirm-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .next-btn {
+    background: transparent;
+    border-color: var(--success);
+    color: var(--success);
+    width: 100%;
+    padding: 0.7rem 1.8rem;
+    font-size: 0.85rem;
+    font-weight: 800;
+    display: none;
+  }
+  .next-btn.show { display: block; }
+  .next-btn:hover { background: rgba(78,207,136,0.1); color: var(--success); border-color: var(--success); }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-in { animation: fadeIn 0.4s ease forwards; }
+
+  /* ---- SCORE SCREEN ---- */
+  .score-screen {
+    text-align: center;
+    padding: 3rem 2rem;
+    background: var(--surface);
+    border: 1px solid #25252f;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .score-screen::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--success));
+  }
+
+  .score-big {
+    font-size: clamp(4rem, 15vw, 7rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    margin: 1rem 0;
+  }
+
+  .score-big span { color: var(--accent); }
+  .score-big .denom { font-size: 0.5em; color: var(--muted); }
+
+  .score-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+  }
+
+  .score-verdict {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 1rem 0 2rem;
+  }
+
+  .trial-breakdown {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin: 1.5rem 0;
+    flex-wrap: wrap;
+  }
+
+  .trial-card {
+    background: var(--bg);
+    border: 1px solid #25252f;
+    border-radius: 4px;
+    padding: 0.8rem 1.2rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    line-height: 1.8;
+    min-width: 140px;
+  }
+
+  .trial-card .tc-head {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+  .trial-card.good .tc-head { color: var(--success); }
+  .trial-card.close .tc-head { color: var(--accent); }
+  .trial-card.far .tc-head { color: var(--accent2); }
+
+  .retry-btn {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 800;
+    font-size: 0.9rem;
+    padding: 0.8rem 2.5rem;
+    margin-top: 1rem;
+  }
+  .retry-btn:hover { opacity: 0.85; color: var(--bg); border-color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="container">
+
+  <!-- QUIZ SCREEN -->
+  <div class="screen active" id="quizScreen">
+    <header>
+      <h1>Find the<br><span>Mean</span></h1>
+      <div class="trial-tracker">
+        <div class="trial-label">Trial <span id="trialNum">1</span> of 3</div>
+        <div class="trial-dots">
+          <div class="dot current" id="dot0"></div>
+          <div class="dot" id="dot1"></div>
+          <div class="dot" id="dot2"></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="chart-wrap" id="chartWrap">
+      <canvas id="distCanvas"></canvas>
+    </div>
+
+    <div class="slider-zone">
+      <div class="slider-label">
+        <span>Your estimate of the mean</span>
+        <span class="value" id="sliderVal">—</span>
+      </div>
+
+      <div class="slider-container">
+        <div class="track">
+          <div class="track-fill" id="trackFill"></div>
+        </div>
+        <input type="range" id="slider" min="0" max="100" value="50" step="0.5">
+        <div class="thumb" id="thumb"></div>
+      </div>
+
+      <!-- Balance beam — hidden until locked in -->
+      <div class="beam-wrap" id="beamWrap">
+        <div class="beam-scene">
+          <div style="width:80%;position:relative;">
+            <div class="beam-weights" id="beamWeights">
+              <div class="weight-marker" id="meanMarker" style="left:50%;opacity:0">
+                <div class="weight-circle weight-mean"></div>
+                <div class="weight-label">mean</div>
+              </div>
+              <div class="weight-marker" id="userMarker" style="left:50%">
+                <div class="weight-circle weight-user"></div>
+                <div class="weight-label">you</div>
+              </div>
+            </div>
+          </div>
+          <div class="beam" id="beam"></div>
+          <div class="beam-fulcrum"></div>
+        </div>
+      </div>
+
+      <!-- Per-trial result -->
+      <div class="result" id="resultArea" style="margin-top:0.8rem">
+        <div class="result-msg" id="resultMsg"></div>
+        <div class="result-meta" id="resultMeta"></div>
+      </div>
+
+      <button class="btn confirm-btn" id="confirmBtn" onclick="checkAnswer()">Lock In Answer</button>
+      <button class="btn next-btn" id="nextBtn" onclick="nextTrial()">Next Distribution →</button>
+    </div>
+  </div>
+
+  <!-- SCORE SCREEN -->
+  <div class="screen" id="scoreScreen">
+    <div class="score-screen animate-in">
+      <div class="score-label">Test Complete</div>
+      <div class="score-big"><span id="finalScore">0</span><span class="denom"> / 3</span></div>
+      <div class="score-verdict" id="scoreVerdict"></div>
+
+      <div class="trial-breakdown" id="trialBreakdown"></div>
+
+      <button class="btn retry-btn" onclick="restartTest()">Try Again</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById('distCanvas');
+const ctx = canvas.getContext('2d');
+const slider = document.getElementById('slider');
+const thumb = document.getElementById('thumb');
+const trackFill = document.getElementById('trackFill');
+const resultMsg = document.getElementById('resultMsg');
+const resultMeta = document.getElementById('resultMeta');
+const confirmBtn = document.getElementById('confirmBtn');
+const nextBtn = document.getElementById('nextBtn');
+const sliderVal = document.getElementById('sliderVal');
+const beam = document.getElementById('beam');
+const beamWrap = document.getElementById('beamWrap');
+
+const TOTAL_TRIALS = 3;
+let currentDist = null;
+let answered = false;
+let trialIndex = 0;
+let score = 0;
+let meanPos = 0.5;
+let trialResults = [];
+
+const distributions = [
+  {
+    name: 'Normal',
+    generate: () => {
+      const mu = 30 + Math.random() * 40;
+      const sigma = 5 + Math.random() * 12;
+      const values = Array.from({length: 300}, () => {
+        let u = 0, v = 0;
+        while (!u) u = Math.random();
+        while (!v) v = Math.random();
+        return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      });
+      return { values, mean: mu };
+    }
+  },
+  {
+    name: 'Right-Skewed',
+    generate: () => {
+      const lambda = 0.05 + Math.random() * 0.08;
+      const shift = 10 + Math.random() * 30;
+      const values = Array.from({length: 300}, () => shift - Math.log(Math.random()) / lambda);
+      const mean = values.reduce((a,b) => a+b, 0) / values.length;
+      return { values, mean };
+    }
+  },
+  {
+    name: 'Left-Skewed',
+    generate: () => {
+      const lambda = 0.05 + Math.random() * 0.08;
+      const shift = 60 + Math.random() * 30;
+      const values = Array.from({length: 300}, () => shift + Math.log(Math.random()) / lambda);
+      const mean = values.reduce((a,b) => a+b, 0) / values.length;
+      return { values, mean };
+    }
+  },
+  {
+    name: 'Bimodal',
+    generate: () => {
+      const mu1 = 20 + Math.random() * 20;
+      const mu2 = 60 + Math.random() * 20;
+      const sigma = 5 + Math.random() * 5;
+      const sampleNorm = (mu) => {
+        let u = 0, v = 0;
+        while (!u) u = Math.random();
+        while (!v) v = Math.random();
+        return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      };
+      const values = Array.from({length: 300}, () => Math.random() < 0.5 ? sampleNorm(mu1) : sampleNorm(mu2));
+      const mean = (mu1 + mu2) / 2;
+      return { values, mean };
+    }
+  },
+  {
+    name: 'Uniform',
+    generate: () => {
+      const lo = 10 + Math.random() * 30;
+      const hi = lo + 20 + Math.random() * 40;
+      const values = Array.from({length: 300}, () => lo + Math.random() * (hi - lo));
+      const mean = (lo + hi) / 2;
+      return { values, mean };
+    }
+  },
+  {
+    name: 'Highly Skewed',
+    generate: () => {
+      const values = Array.from({length: 300}, () => {
+        const u = Math.random();
+        return Math.pow(u, 0.1) * 90 + 5;
+      });
+      const mean = values.reduce((a,b) => a+b, 0) / values.length;
+      return { values, mean };
+    }
+  }
+];
+
+// Shuffle and pick 3 unique distributions
+let distQueue = [];
+function buildQueue() {
+  const shuffled = [...distributions].sort(() => Math.random() - 0.5);
+  distQueue = shuffled.slice(0, TOTAL_TRIALS).map(d => d.generate());
+}
+
+function drawHistogram(dist) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+
+  const vals = dist.values;
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+  const range = maxV - minV;
+  const bins = 30;
+  const binSize = range / bins;
+  const counts = new Array(bins).fill(0);
+  vals.forEach(v => {
+    const i = Math.min(Math.floor((v - minV) / binSize), bins - 1);
+    counts[i]++;
+  });
+  const maxCount = Math.max(...counts);
+
+  const pad = { top: 10, left: 4, right: 4, bottom: 4 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+  const bw = plotW / bins;
+
+  const grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
+  grad.addColorStop(0, 'rgba(240,192,64,0.5)');
+  grad.addColorStop(1, 'rgba(240,192,64,0.05)');
+
+  counts.forEach((c, i) => {
+    const bh = (c / maxCount) * plotH;
+    const x = pad.left + i * bw;
+    const y = pad.top + plotH - bh;
+    ctx.fillStyle = grad;
+    ctx.fillRect(x + 1, y, bw - 2, bh);
+    ctx.strokeStyle = 'rgba(240,192,64,0.8)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(x + 1, y, bw - 2, bh);
+  });
+
+  meanPos = (dist.mean - minV) / range;
+  meanPos = Math.max(0, Math.min(1, meanPos));
+  dist.minV = minV;
+  dist.maxV = maxV;
+}
+
+function updateSliderUI() {
+  const pct = (slider.value - slider.min) / (slider.max - slider.min);
+  trackFill.style.width = (pct * 100) + '%';
+  thumb.style.left = (pct * 100) + '%';
+  if (currentDist && currentDist.minV !== undefined) {
+    const rangeVal = currentDist.minV + pct * (currentDist.maxV - currentDist.minV);
+    sliderVal.textContent = rangeVal.toFixed(1);
+  }
+}
+
+function updateDots() {
+  for (let i = 0; i < TOTAL_TRIALS; i++) {
+    const dot = document.getElementById('dot' + i);
+    dot.className = 'dot';
+    if (i < trialResults.length) {
+      dot.classList.add('done-' + trialResults[i].cls);
+    } else if (i === trialIndex) {
+      dot.classList.add('current');
+    }
+  }
+  document.getElementById('trialNum').textContent = trialIndex + 1;
+}
+
+function loadTrial(index) {
+  currentDist = distQueue[index];
+  answered = false;
+  confirmBtn.disabled = false;
+  confirmBtn.style.display = 'block';
+  nextBtn.classList.remove('show');
+  resultMsg.className = 'result-msg';
+  resultMsg.textContent = '';
+  resultMeta.textContent = '';
+  beamWrap.classList.remove('visible');
+  beam.className = 'beam';
+
+  document.getElementById('meanMarker').style.opacity = '0';
+  document.getElementById('userMarker').style.left = '50%';
+
+  // Reset slider
+  slider.value = 50;
+
+  document.getElementById('chartWrap').classList.remove('loaded');
+  setTimeout(() => {
+    drawHistogram(currentDist);
+    document.getElementById('chartWrap').classList.add('loaded');
+    updateSliderUI();
+  }, 50);
+
+  updateDots();
+}
+
+function checkAnswer() {
+  if (!currentDist || answered) return;
+  answered = true;
+  confirmBtn.disabled = true;
+  confirmBtn.style.display = 'none';
+
+  const pct = (slider.value - slider.min) / (slider.max - slider.min);
+  const userVal = currentDist.minV + pct * (currentDist.maxV - currentDist.minV);
+  const range = currentDist.maxV - currentDist.minV;
+  const diffPct = Math.abs(userVal - currentDist.mean) / range * 100;
+
+  // Reveal beam
+  beamWrap.classList.add('visible');
+
+  // Set beam angle
+  const diff = pct - meanPos;
+  const tilt = diff * 40;
+  beam.style.transform = `rotate(${tilt}deg)`;
+
+  // Show markers
+  document.getElementById('userMarker').style.left = (pct * 100) + '%';
+  document.getElementById('meanMarker').style.left = (meanPos * 100) + '%';
+  document.getElementById('meanMarker').style.opacity = '1';
+
+  let msg, cls;
+  if (diffPct < 3) {
+    msg = 'Perfect balance!'; cls = 'good';
+    beam.classList.add('balanced');
+    score++;
+  } else if (diffPct < 8) {
+    msg = 'Very close!'; cls = 'close';
+    beam.classList.add('close');
+    score++;
+  } else if (diffPct < 15) {
+    msg = 'Almost there.'; cls = 'close';
+    beam.classList.add('close');
+  } else {
+    msg = 'Off balance.'; cls = 'far';
+    beam.classList.add('far');
+  }
+
+  resultMsg.textContent = msg;
+  resultMsg.className = `result-msg show animate-in ${cls}`;
+  resultMeta.innerHTML = `Your guess: ${userVal.toFixed(1)}&nbsp;&nbsp;·&nbsp;&nbsp;Actual mean: ${currentDist.mean.toFixed(1)}&nbsp;&nbsp;·&nbsp;&nbsp;Error: ${diffPct.toFixed(1)}%`;
+
+  trialResults.push({ cls, userVal, mean: currentDist.mean, diffPct });
+  updateDots();
+
+  const isLast = trialIndex === TOTAL_TRIALS - 1;
+  nextBtn.textContent = isLast ? 'See My Score →' : 'Next Distribution →';
+  nextBtn.classList.add('show');
+}
+
+function nextTrial() {
+  if (trialIndex < TOTAL_TRIALS - 1) {
+    trialIndex++;
+    loadTrial(trialIndex);
+  } else {
+    showScoreScreen();
+  }
+}
+
+function showScoreScreen() {
+  document.getElementById('quizScreen').classList.remove('active');
+  const scoreScreen = document.getElementById('scoreScreen');
+  scoreScreen.classList.add('active');
+
+  document.getElementById('finalScore').textContent = score;
+
+  const verdicts = [
+    ['3', 'Perfect! You have excellent intuition for distributions.', 'good'],
+    ['2', 'Great work — you clearly understand where distributions balance.', 'close'],
+    ['1', 'Not bad. Keep practicing to sharpen your intuition.', 'far'],
+    ['0', 'Every expert starts somewhere. Try again!', 'far'],
+  ];
+  const v = verdicts.find(v => v[0] === String(score)) || verdicts[3];
+  const verdict = document.getElementById('scoreVerdict');
+  verdict.textContent = v[1];
+  verdict.style.color = v[2] === 'good' ? 'var(--success)' : v[2] === 'close' ? 'var(--accent)' : 'var(--accent2)';
+
+  const breakdown = document.getElementById('trialBreakdown');
+  breakdown.innerHTML = '';
+  trialResults.forEach((r, i) => {
+    const div = document.createElement('div');
+    div.className = `trial-card ${r.cls}`;
+    const label = r.cls === 'good' ? 'Perfect' : r.cls === 'close' ? 'Close' : 'Off';
+    div.innerHTML = `<div class="tc-head">Trial ${i + 1} — ${label}</div>
+      Your guess: ${r.userVal.toFixed(1)}<br>
+      Actual mean: ${r.mean.toFixed(1)}<br>
+      Error: ${r.diffPct.toFixed(1)}%`;
+    breakdown.appendChild(div);
+  });
+}
+
+function restartTest() {
+  score = 0;
+  trialIndex = 0;
+  trialResults = [];
+  buildQueue();
+
+  document.getElementById('scoreScreen').classList.remove('active');
+  document.getElementById('quizScreen').classList.add('active');
+
+  loadTrial(0);
+}
+
+// Events
+slider.addEventListener('input', () => { if (!answered) updateSliderUI(); });
+slider.addEventListener('mousedown', () => thumb.classList.add('active'));
+slider.addEventListener('touchstart', () => thumb.classList.add('active'));
+slider.addEventListener('mouseup', () => thumb.classList.remove('active'));
+slider.addEventListener('touchend', () => thumb.classList.remove('active'));
+window.addEventListener('resize', () => { if (currentDist) drawHistogram(currentDist); });
+
+// Init
+buildQueue();
+loadTrial(0);
+</script>
+</body>
+</html>

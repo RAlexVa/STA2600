@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Median Test</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e12;
+    --surface: #18181f;
+    --border: #2a2a35;
+    --accent: #f0c040;
+    --accent2: #60c8f0;
+    --text: #e8e8f0;
+    --muted: #888899;
+    --dot-left: #60c8f0;
+    --dot-right: #e86060;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+    margin-bottom: 4px;
+    text-align: center;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  /* ---- PROGRESS BAR ---- */
+  .progress-header {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .round-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .score-pills {
+    display: flex;
+    gap: 8px;
+  }
+
+  .pill {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+  }
+  .pill.correct { background: #40c07022; border: 1px solid #40c070; color: #40c070; }
+  .pill.incorrect { background: #e8606022; border: 1px solid #e86060; color: #e86060; }
+
+  .progress-bar-track {
+    width: 100%;
+    max-width: 720px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 4px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+
+  /* ---- CARD ---- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    width: 100%;
+    max-width: 720px;
+  }
+
+  /* ---- DOT PLOT ---- */
+  .plot-wrapper {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    margin-bottom: 8px;
+  }
+
+  canvas#dotPlot {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .drag-line {
+    position: absolute;
+    top: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    cursor: ew-resize;
+    transform: translateX(-50%);
+    transition: box-shadow 0.15s;
+    touch-action: none;
+  }
+  .drag-line:hover, .drag-line.dragging {
+    box-shadow: 0 0 14px 4px #f0c04066;
+  }
+  .drag-line::after {
+    content: '◆';
+    position: absolute;
+    bottom: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .axis-line {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--border);
+    pointer-events: none;
+  }
+
+  .axis-labels {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 0.65rem;
+    margin-bottom: 24px;
+    padding: 0 2px;
+  }
+
+  /* ---- STATS ---- */
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .stat-box {
+    flex: 1;
+    min-width: 120px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+
+  .stat-box .label {
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+
+  .stat-box .value {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 800;
+  }
+
+  .stat-box.guess .value { color: var(--accent); }
+  .stat-box.result .value { color: var(--text); }
+
+  /* ---- FEEDBACK ---- */
+  .feedback {
+    margin-top: 20px;
+    padding: 16px 20px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+
+  .feedback-icon { font-size: 1.8rem; flex-shrink: 0; }
+  .feedback.good { border-color: #40c070; }
+  .feedback.ok   { border-color: var(--accent); }
+  .feedback.bad  { border-color: #e86060; }
+
+  /* ---- BUTTONS ---- */
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button:active:not(:disabled) { transform: scale(0.97); }
+
+  .btn-check {
+    background: var(--accent);
+    color: #0e0e12;
+    flex: 1;
+  }
+
+  .btn-next {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    flex: 1;
+  }
+  .btn-next:not(:disabled):hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ---- SCORE SCREEN ---- */
+  .score-screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 20px;
+    padding: 16px 0;
+  }
+
+  .score-screen.visible { display: flex; }
+
+  .big-score {
+    font-family: 'Syne', sans-serif;
+    font-size: 5rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .score-label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .score-breakdown {
+    display: flex;
+    gap: 16px;
+  }
+
+  .score-detail {
+    padding: 14px 24px;
+    border-radius: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .score-detail .val {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+  }
+  .score-detail .lbl {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .score-detail.c .val { color: #40c070; }
+  .score-detail.w .val { color: #e86060; }
+
+  .score-message {
+    font-size: 0.9rem;
+    color: var(--muted);
+    max-width: 360px;
+    line-height: 1.6;
+  }
+
+  .btn-restart {
+    background: var(--accent);
+    color: #0e0e12;
+    padding: 14px 36px;
+    font-size: 0.85rem;
+  }
+
+  .game-area { width: 100%; }
+</style>
+</head>
+<body>
+
+<h1>Median Test</h1>
+<p class="subtitle">3 rounds — drag the line to the median, then check your guess</p>
+
+<div class="progress-header">
+  <span class="round-label" id="roundLabel">Round 1 of 3</span>
+  <div class="score-pills">
+    <span class="pill correct" id="correctPill">✓ 0</span>
+    <span class="pill incorrect" id="incorrectPill">✗ 0</span>
+  </div>
+</div>
+<div class="progress-bar-track">
+  <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+</div>
+
+<div class="card">
+  <!-- Game area -->
+  <div class="game-area" id="gameArea">
+    <div class="plot-wrapper" id="plotWrapper">
+      <canvas id="dotPlot"></canvas>
+      <div class="axis-line"></div>
+      <div class="drag-line" id="dragLine"></div>
+    </div>
+    <div class="axis-labels" id="axisLabels"></div>
+
+    <div class="stats-row">
+      <div class="stat-box guess">
+        <div class="label">Your Guess</div>
+        <div class="value" id="guessVal">—</div>
+      </div>
+      <div class="stat-box result">
+        <div class="label">True Median</div>
+        <div class="value" id="trueMedian">?</div>
+      </div>
+    </div>
+
+    <div class="feedback" id="feedback">
+      <span class="feedback-icon">👆</span>
+      <span>Drag the <b style="color:var(--accent)">gold line</b> to where you think the median is, then click <b>Check</b>.</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-check" id="btnCheck">Check My Guess</button>
+      <button class="btn-next" id="btnNext" disabled>Next Round →</button>
+    </div>
+  </div>
+
+  <!-- Score screen -->
+  <div class="score-screen" id="scoreScreen">
+    <div class="score-label">Final Score</div>
+    <div class="big-score" id="bigScore">0/3</div>
+    <div class="score-breakdown">
+      <div class="score-detail c">
+        <div class="val" id="finalCorrect">0</div>
+        <div class="lbl">Correct</div>
+      </div>
+      <div class="score-detail w">
+        <div class="val" id="finalIncorrect">0</div>
+        <div class="lbl">Incorrect</div>
+      </div>
+    </div>
+    <div class="score-message" id="scoreMessage"></div>
+    <button class="btn-restart" id="btnRestart">Try Again ↻</button>
+  </div>
+</div>
+
+<script>
+const TOTAL_ROUNDS = 3;
+const DIST_NAMES = ['Normal', 'Bimodal', 'Skewed Right', 'Skewed Left', 'Uniform'];
+
+let round = 0;
+let correct = 0;
+let incorrect = 0;
+let data = [];
+let guessX = 0.5;
+let checked = false;
+
+function normalSample(mean=0, std=1) {
+  let u, v;
+  do { u = Math.random(); } while(u === 0);
+  do { v = Math.random(); } while(v === 0);
+  return mean + std * Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+const DISTRIBUTIONS = {
+  'Normal':       () => normalSample(50, 15),
+  'Skewed Right': () => Math.abs(normalSample(0,1)) * 30 + 10,
+  'Skewed Left':  () => 100 - Math.abs(normalSample(0,1)) * 30,
+  'Bimodal':      () => Math.random() < 0.5 ? normalSample(30, 8) : normalSample(70, 8),
+  'Uniform':      () => Math.random() * 80 + 10,
+};
+
+// Shuffle so each session sees them in random order (sample 3 from 5)
+let distQueue = [];
+function buildQueue() {
+  const shuffled = [...DIST_NAMES].sort(() => Math.random() - 0.5);
+  distQueue = shuffled.slice(0, TOTAL_ROUNDS);
+}
+
+const canvas = document.getElementById('dotPlot');
+const ctx = canvas.getContext('2d');
+const dragLine = document.getElementById('dragLine');
+const plotWrapper = document.getElementById('plotWrapper');
+
+function fractionToValue(f) { return f * 100; }
+function valueToFraction(v) { return v / 100; }
+
+function draw() {
+  const W = canvas.offsetWidth;
+  const H = canvas.offsetHeight;
+  canvas.width = W;
+  canvas.height = H;
+
+  const PAD = 12;
+  const plotW = W - 2 * PAD;
+  const RADIUS = 6;
+  const DIAM = RADIUS * 2 + 2;
+  const bins = 40;
+  const binW = plotW / bins;
+  const cols = Array.from({length: bins}, () => []);
+
+  data.forEach(v => {
+    const b = Math.min(bins - 1, Math.floor((v / 100) * bins));
+    cols[b].push(v);
+  });
+
+  const guessValue = fractionToValue(guessX);
+
+  cols.forEach((pts, bi) => {
+    const cx = PAD + (bi + 0.5) * binW;
+    pts.forEach((v, row) => {
+      const cy = H - RADIUS - 2 - row * DIAM;
+      ctx.beginPath();
+      ctx.arc(cx, cy, RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = v < guessValue ? 'rgba(96,200,240,0.85)' : 'rgba(232,96,96,0.85)';
+      ctx.fill();
+    });
+  });
+
+  ctx.strokeStyle = '#2a2a35';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 10; i++) {
+    const x = PAD + (i / 10) * plotW;
+    ctx.beginPath(); ctx.moveTo(x, H - 2); ctx.lineTo(x, H - 8); ctx.stroke();
+  }
+
+  const labels = document.getElementById('axisLabels');
+  labels.innerHTML = '';
+  for (let i = 0; i <= 5; i++) {
+    const span = document.createElement('span');
+    span.textContent = Math.round(i * 20);
+    labels.appendChild(span);
+  }
+}
+
+function updateDragLine() {
+  const W = plotWrapper.offsetWidth;
+  const PAD = 12;
+  const plotW = W - 2 * PAD;
+  const px = PAD + guessX * plotW;
+  dragLine.style.left = px + 'px';
+}
+
+function updateGuessDisplay() {
+  document.getElementById('guessVal').textContent = fractionToValue(guessX).toFixed(1);
+}
+
+function startRound() {
+  checked = false;
+  guessX = 0.5;
+  const distName = distQueue[round];
+  const gen = DISTRIBUTIONS[distName];
+  const n = 60 + Math.floor(Math.random() * 60);
+  data = Array.from({length: n}, gen).map(v => Math.max(1, Math.min(99, v)));
+
+  document.getElementById('trueMedian').textContent = '?';
+  document.getElementById('feedback').className = 'feedback';
+  document.getElementById('feedback').innerHTML = `<span class="feedback-icon">👆</span><span>Drag the <b style="color:var(--accent)">gold line</b> to where you think the median is, then click <b>Check</b>.</span>`;
+  document.getElementById('btnCheck').disabled = false;
+  document.getElementById('btnNext').disabled = true;
+
+  updateDragLine();
+  draw();
+  updateGuessDisplay();
+
+  // progress bar: filled portion = rounds completed
+  document.getElementById('progressFill').style.width = (round / TOTAL_ROUNDS * 100) + '%';
+  document.getElementById('roundLabel').textContent = `Round ${round + 1} of ${TOTAL_ROUNDS}`;
+}
+
+function checkGuess() {
+  checked = true;
+  const guessValue = fractionToValue(guessX);
+  const sorted = [...data].sort((a,b) => a - b);
+  const n = sorted.length;
+  const trueMed = n % 2 === 0 ? (sorted[n/2-1] + sorted[n/2]) / 2 : sorted[Math.floor(n/2)];
+  document.getElementById('trueMedian').textContent = trueMed.toFixed(1);
+
+  const leftPct = 100 * data.filter(v => v < guessValue).length / data.length;
+  const diff = Math.abs(leftPct - 50);
+  const fb = document.getElementById('feedback');
+
+  const isCorrect = diff <= 12; // ≤12% off = correct (≤5 excellent, 5-12 ok)
+
+  if (diff <= 5) {
+    fb.className = 'feedback good';
+    fb.innerHTML = `<span class="feedback-icon">🎯</span><span><b>${leftPct.toFixed(0)}%</b> of points left — <b style="color:#40c070">excellent!</b> True median: <b>${trueMed.toFixed(1)}</b>.</span>`;
+    correct++;
+  } else if (diff <= 12) {
+    fb.className = 'feedback ok';
+    fb.innerHTML = `<span class="feedback-icon">👍</span><span><b>${leftPct.toFixed(0)}%</b> left — close! Off by ~<b>${diff.toFixed(0)}%</b> from 50. True median: <b>${trueMed.toFixed(1)}</b>.</span>`;
+    correct++;
+  } else {
+    fb.className = 'feedback bad';
+    fb.innerHTML = `<span class="feedback-icon">📉</span><span><b>${leftPct.toFixed(0)}%</b> left — ${leftPct < 50 ? 'needed to go right' : 'needed to go left'}. True median: <b>${trueMed.toFixed(1)}</b>.</span>`;
+    incorrect++;
+  }
+
+  updatePills();
+  document.getElementById('btnCheck').disabled = true;
+
+  if (round + 1 >= TOTAL_ROUNDS) {
+    document.getElementById('btnNext').textContent = 'See Results →';
+  }
+  document.getElementById('btnNext').disabled = false;
+}
+
+function nextRound() {
+  round++;
+  if (round >= TOTAL_ROUNDS) {
+    showResults();
+  } else {
+    startRound();
+  }
+}
+
+function updatePills() {
+  document.getElementById('correctPill').textContent = `✓ ${correct}`;
+  document.getElementById('incorrectPill').textContent = `✗ ${incorrect}`;
+}
+
+function showResults() {
+  document.getElementById('gameArea').style.display = 'none';
+  document.getElementById('scoreScreen').classList.add('visible');
+  document.getElementById('progressFill').style.width = '100%';
+  document.getElementById('roundLabel').textContent = 'Complete!';
+
+  document.getElementById('bigScore').textContent = `${correct}/${TOTAL_ROUNDS}`;
+  document.getElementById('finalCorrect').textContent = correct;
+  document.getElementById('finalIncorrect').textContent = incorrect;
+
+  const msgs = {
+    3: "Perfect score! You have excellent intuition for the median. 🏆",
+    2: "Good job! You got 2 out of 3 — solid understanding of the median.",
+    1: "1 out of 3 — keep practicing! The median splits data into two equal halves.",
+    0: "No worries — the median can be tricky, especially with skewed distributions. Give it another go!"
+  };
+  document.getElementById('scoreMessage').textContent = msgs[correct];
+
+  // color the big score
+  const scoreEl = document.getElementById('bigScore');
+  if (correct === 3) scoreEl.style.color = '#40c070';
+  else if (correct === 2) scoreEl.style.color = 'var(--accent)';
+  else scoreEl.style.color = '#e86060';
+}
+
+function restartGame() {
+  round = 0; correct = 0; incorrect = 0;
+  buildQueue();
+  updatePills();
+  document.getElementById('gameArea').style.display = 'block';
+  document.getElementById('scoreScreen').classList.remove('visible');
+  document.getElementById('btnNext').textContent = 'Next Round →';
+  startRound();
+}
+
+// Drag logic
+let dragging = false;
+
+function getPosFromEvent(e) {
+  const rect = plotWrapper.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  return clientX - rect.left;
+}
+
+dragLine.addEventListener('mousedown', e => { dragging = true; dragLine.classList.add('dragging'); e.preventDefault(); });
+dragLine.addEventListener('touchstart', e => { dragging = true; dragLine.classList.add('dragging'); e.preventDefault(); }, {passive:false});
+
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const W = plotWrapper.offsetWidth;
+  const PAD = 12;
+  const plotW = W - 2 * PAD;
+  guessX = Math.max(0, Math.min(1, (getPosFromEvent(e) - PAD) / plotW));
+  updateDragLine();
+  draw();
+  updateGuessDisplay();
+});
+
+document.addEventListener('touchmove', e => {
+  if (!dragging) return;
+  const W = plotWrapper.offsetWidth;
+  const PAD = 12;
+  const plotW = W - 2 * PAD;
+  guessX = Math.max(0, Math.min(1, (getPosFromEvent(e) - PAD) / plotW));
+  updateDragLine();
+  draw();
+  updateGuessDisplay();
+}, {passive:false});
+
+document.addEventListener('mouseup', () => { dragging = false; dragLine.classList.remove('dragging'); });
+document.addEventListener('touchend', () => { dragging = false; dragLine.classList.remove('dragging'); });
+
+document.getElementById('btnCheck').addEventListener('click', checkGuess);
+document.getElementById('btnNext').addEventListener('click', nextRound);
+document.getElementById('btnRestart').addEventListener('click', restartGame);
+window.addEventListener('resize', () => { updateDragLine(); draw(); });
+
+// Start!
+buildQueue();
+startRound();
+</script>
+</body>
+</html>

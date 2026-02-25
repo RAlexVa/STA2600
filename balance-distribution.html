@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Find the Balance</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e12;
+    --surface: #18181f;
+    --bar: #2a2a36;
+    --accent: #f0c040;
+    --accent2: #e05c5c;
+    --text: #e8e8f0;
+    --muted: #6a6a7a;
+    --success: #4ecf88;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    overflow: hidden;
+  }
+
+  .noise {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.4;
+  }
+
+  .container {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 720px;
+    display: flex; flex-direction: column; gap: 2rem;
+  }
+
+  header {
+    display: flex; justify-content: space-between; align-items: flex-end;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.6;
+  }
+
+  /* Chart area */
+  .chart-wrap {
+    background: var(--surface);
+    border-radius: 4px;
+    padding: 1.5rem 1.5rem 0;
+    border: 1px solid #25252f;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .chart-wrap::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.8s ease;
+  }
+  .chart-wrap.loaded::before { transform: scaleX(1); }
+
+  canvas#distCanvas {
+    display: block;
+    width: 100%;
+    height: 200px;
+  }
+
+  /* Slider zone */
+  .slider-zone {
+    position: relative;
+    padding: 1rem 1.5rem 1.5rem;
+    background: var(--surface);
+    border: 1px solid #25252f;
+    border-radius: 4px;
+  }
+
+  .slider-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .slider-label .value {
+    color: var(--accent);
+  }
+
+  /* Custom slider */
+  .slider-container {
+    position: relative;
+    height: 40px;
+    display: flex;
+    align-items: center;
+  }
+
+  .track {
+    width: 100%;
+    height: 4px;
+    background: var(--bar);
+    border-radius: 2px;
+    position: relative;
+  }
+
+  .track-fill {
+    position: absolute;
+    left: 0;
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.05s;
+  }
+
+  input[type=range] {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    margin: 0;
+    z-index: 2;
+  }
+
+  .thumb {
+    position: absolute;
+    width: 22px; height: 22px;
+    background: var(--bg);
+    border: 3px solid var(--accent);
+    border-radius: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 0 0 0 rgba(240,192,64,0);
+  }
+
+  .thumb.active {
+    box-shadow: 0 0 0 8px rgba(240,192,64,0.15);
+  }
+
+  /* Balance beam visual */
+  .beam-wrap {
+    margin-top: 1rem;
+    position: relative;
+    height: 60px;
+  }
+
+  .beam-scene {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .beam {
+    width: 80%;
+    height: 6px;
+    background: var(--bar);
+    border-radius: 3px;
+    position: relative;
+    transform-origin: center;
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s;
+    will-change: transform;
+  }
+
+  .beam.balanced { background: var(--success); }
+  .beam.close { background: var(--accent); }
+  .beam.far { background: var(--accent2); }
+
+  .beam-fulcrum {
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 18px solid #25252f;
+    margin-top: 0;
+  }
+
+  .beam-weights {
+    position: absolute;
+    top: -28px;
+    width: 80%;
+    left: 10%;
+    pointer-events: none;
+  }
+
+  .weight-marker {
+    position: absolute;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    transition: left 0.05s;
+  }
+
+  .weight-circle {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid;
+  }
+
+  .weight-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  .weight-mean { border-color: var(--success); background: rgba(78,207,136,0.2); }
+  .weight-user { border-color: var(--accent); background: rgba(240,192,64,0.2); }
+
+  /* Result badge */
+  .result {
+    min-height: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .result-msg {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    transition: opacity 0.3s;
+  }
+
+  .result-msg.hidden { opacity: 0; }
+  .result-msg.good { color: var(--success); }
+  .result-msg.close { color: var(--accent); }
+  .result-msg.far { color: var(--accent2); }
+
+  .result-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.6;
+  }
+
+  /* Button */
+  .btn {
+    background: transparent;
+    border: 1.5px solid var(--muted);
+    color: var(--muted);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.5rem 1.2rem;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .confirm-btn {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 800;
+    font-size: 0.85rem;
+    padding: 0.7rem 1.8rem;
+    width: 100%;
+    margin-top: 0.5rem;
+    transition: opacity 0.2s;
+  }
+  .confirm-btn:hover { opacity: 0.85; color: var(--bg); border-color: var(--accent); }
+  .confirm-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Distribution type tag */
+  .dist-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    background: rgba(240,192,64,0.1);
+    padding: 0.2rem 0.5rem;
+    border-radius: 2px;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-in { animation: fadeIn 0.4s ease forwards; }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="container">
+  <header>
+    <h1>Find the<br><span>Balance</span></h1>
+    <div class="meta" id="distInfo">
+      — Distribution —<br>
+      <span id="distName">Loading...</span>
+    </div>
+  </header>
+
+  <div class="chart-wrap" id="chartWrap">
+    <canvas id="distCanvas"></canvas>
+  </div>
+
+  <div class="slider-zone">
+    <div class="slider-label">
+      <span>Your estimate of the mean</span>
+      <span class="value" id="sliderVal">—</span>
+    </div>
+
+    <div class="slider-container">
+      <div class="track">
+        <div class="track-fill" id="trackFill"></div>
+      </div>
+      <input type="range" id="slider" min="0" max="100" value="50" step="0.5">
+      <div class="thumb" id="thumb"></div>
+    </div>
+
+    <!-- Balance beam -->
+    <div class="beam-wrap">
+      <div class="beam-scene">
+        <div style="width:80%;position:relative;">
+          <div class="beam-weights" id="beamWeights">
+            <div class="weight-marker" id="meanMarker" style="left:50%">
+              <div class="weight-circle weight-mean"></div>
+              <div class="weight-label">mean</div>
+            </div>
+            <div class="weight-marker" id="userMarker" style="left:50%">
+              <div class="weight-circle weight-user"></div>
+              <div class="weight-label">you</div>
+            </div>
+          </div>
+        </div>
+        <div class="beam" id="beam"></div>
+        <div class="beam-fulcrum"></div>
+      </div>
+    </div>
+
+    <div class="result" id="resultArea">
+      <div class="result-msg hidden" id="resultMsg"></div>
+      <div class="result-meta" id="resultMeta"></div>
+    </div>
+
+    <button class="btn confirm-btn" id="confirmBtn" onclick="checkAnswer()">Lock In Answer</button>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;">
+      <button class="btn" onclick="newDistribution()">New Distribution</button>
+      <div style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted)">
+        Score: <span id="score" style="color:var(--accent)">0</span> / <span id="total">0</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('distCanvas');
+const ctx = canvas.getContext('2d');
+const slider = document.getElementById('slider');
+const thumb = document.getElementById('thumb');
+const trackFill = document.getElementById('trackFill');
+const resultMsg = document.getElementById('resultMsg');
+const resultMeta = document.getElementById('resultMeta');
+const confirmBtn = document.getElementById('confirmBtn');
+const sliderVal = document.getElementById('sliderVal');
+const beam = document.getElementById('beam');
+const distName = document.getElementById('distName');
+
+let currentDist = null;
+let answered = false;
+let score = 0, total = 0;
+let meanPos = 0.5; // 0-1 position of mean in canvas
+
+const distributions = [
+  {
+    name: 'Normal',
+    generate: () => {
+      const mu = 30 + Math.random() * 40;
+      const sigma = 5 + Math.random() * 12;
+      const values = Array.from({length: 300}, () => {
+        let u = 0, v = 0;
+        while (!u) u = Math.random();
+        while (!v) v = Math.random();
+        return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      });
+      return { values, mean: mu, label: `Normal μ=${mu.toFixed(1)} σ=${sigma.toFixed(1)}` };
+    }
+  },
+  {
+    name: 'Right-Skewed',
+    generate: () => {
+      const lambda = 0.05 + Math.random() * 0.08;
+      const shift = 10 + Math.random() * 30;
+      const values = Array.from({length: 300}, () => shift - Math.log(Math.random()) / lambda);
+      const mean = values.reduce((a,b) => a+b, 0) / values.length;
+      return { values, mean, label: 'Exponential (Right Skew)' };
+    }
+  },
+  {
+    name: 'Left-Skewed',
+    generate: () => {
+      const lambda = 0.05 + Math.random() * 0.08;
+      const shift = 60 + Math.random() * 30;
+      const values = Array.from({length: 300}, () => shift + Math.log(Math.random()) / lambda);
+      const mean = values.reduce((a,b) => a+b, 0) / values.length;
+      return { values, mean, label: 'Reflected Exponential (Left Skew)' };
+    }
+  },
+  {
+    name: 'Bimodal',
+    generate: () => {
+      const mu1 = 20 + Math.random() * 20;
+      const mu2 = 60 + Math.random() * 20;
+      const sigma = 5 + Math.random() * 5;
+      const sampleNorm = (mu) => {
+        let u = 0, v = 0;
+        while (!u) u = Math.random();
+        while (!v) v = Math.random();
+        return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      };
+      const values = Array.from({length: 300}, () => Math.random() < 0.5 ? sampleNorm(mu1) : sampleNorm(mu2));
+      const mean = (mu1 + mu2) / 2;
+      return { values, mean, label: `Bimodal (peaks ~${mu1.toFixed(0)}, ${mu2.toFixed(0)})` };
+    }
+  },
+  {
+    name: 'Uniform',
+    generate: () => {
+      const lo = 10 + Math.random() * 30;
+      const hi = lo + 20 + Math.random() * 40;
+      const values = Array.from({length: 300}, () => lo + Math.random() * (hi - lo));
+      const mean = (lo + hi) / 2;
+      return { values, mean, label: `Uniform [${lo.toFixed(0)}, ${hi.toFixed(0)}]` };
+    }
+  },
+  {
+    name: 'Highly Skewed',
+    generate: () => {
+      const values = Array.from({length: 300}, () => {
+        const u = Math.random();
+        return Math.pow(u, 0.1) * 90 + 5;
+      });
+      const mean = values.reduce((a,b) => a+b, 0) / values.length;
+      return { values, mean, label: 'Power Distribution (Heavy Left)' };
+    }
+  }
+];
+
+function drawHistogram(dist) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+
+  const vals = dist.values;
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+  const range = maxV - minV;
+  const bins = 30;
+  const binSize = range / bins;
+  const counts = new Array(bins).fill(0);
+  vals.forEach(v => {
+    const i = Math.min(Math.floor((v - minV) / binSize), bins - 1);
+    counts[i]++;
+  });
+  const maxCount = Math.max(...counts);
+
+  const pad = { top: 10, left: 4, right: 4, bottom: 4 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+  const bw = plotW / bins;
+
+  // Background gradient
+  const grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
+  grad.addColorStop(0, 'rgba(240,192,64,0.5)');
+  grad.addColorStop(1, 'rgba(240,192,64,0.05)');
+
+  counts.forEach((c, i) => {
+    const bh = (c / maxCount) * plotH;
+    const x = pad.left + i * bw;
+    const y = pad.top + plotH - bh;
+    ctx.fillStyle = grad;
+    ctx.fillRect(x + 1, y, bw - 2, bh);
+    ctx.strokeStyle = 'rgba(240,192,64,0.8)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(x + 1, y, bw - 2, bh);
+  });
+
+  // Mean line (hidden during play)
+  meanPos = (dist.mean - minV) / range;
+  meanPos = Math.max(0, Math.min(1, meanPos));
+
+  dist.minV = minV; dist.maxV = maxV;
+}
+
+function updateSliderUI() {
+  const pct = (slider.value - slider.min) / (slider.max - slider.min);
+  trackFill.style.width = (pct * 100) + '%';
+  thumb.style.left = (pct * 100) + '%';
+
+  // Show user's value mapped to dist range
+  if (currentDist) {
+    const rangeVal = currentDist.minV + pct * (currentDist.maxV - currentDist.minV);
+    sliderVal.textContent = rangeVal.toFixed(1);
+  } else {
+    sliderVal.textContent = slider.value;
+  }
+
+  // Update beam tilt
+  if (!answered) {
+    updateBeam(pct);
+  }
+}
+
+function updateBeam(userPct) {
+  const diff = userPct - meanPos; // positive = user is right of mean
+  const tilt = diff * 40; // degrees
+  beam.style.transform = `rotate(${tilt}deg)`;
+
+  // Update user marker on beam
+  const userMarker = document.getElementById('userMarker');
+  userMarker.style.left = (userPct * 100) + '%';
+
+  const meanMarker = document.getElementById('meanMarker');
+  meanMarker.style.opacity = answered ? '1' : '0';
+}
+
+function newDistribution() {
+  const pick = distributions[Math.floor(Math.random() * distributions.length)];
+  currentDist = pick.generate();
+  answered = false;
+  confirmBtn.disabled = false;
+  resultMsg.className = 'result-msg hidden';
+  resultMeta.textContent = '';
+  distName.textContent = currentDist.label;
+
+  document.getElementById('chartWrap').classList.remove('loaded');
+  setTimeout(() => {
+    drawHistogram(currentDist);
+    document.getElementById('chartWrap').classList.add('loaded');
+    // Hide mean marker
+    document.getElementById('meanMarker').style.opacity = '0';
+    beam.className = 'beam';
+    updateSliderUI();
+  }, 50);
+}
+
+function checkAnswer() {
+  if (!currentDist || answered) return;
+  answered = true;
+  confirmBtn.disabled = true;
+  total++;
+
+  const pct = (slider.value - slider.min) / (slider.max - slider.min);
+  const userVal = currentDist.minV + pct * (currentDist.maxV - currentDist.minV);
+  const range = currentDist.maxV - currentDist.minV;
+  const diffPct = Math.abs(userVal - currentDist.mean) / range * 100;
+
+  // Show mean marker
+  const meanMarker = document.getElementById('meanMarker');
+  meanMarker.style.left = (meanPos * 100) + '%';
+  meanMarker.style.opacity = '1';
+
+  // Final beam state
+  updateBeam(pct);
+
+  let msg, cls;
+  if (diffPct < 3) {
+    msg = 'Perfect balance!'; cls = 'good';
+    beam.classList.add('balanced');
+    score++;
+  } else if (diffPct < 8) {
+    msg = 'Very close!'; cls = 'close';
+    beam.classList.add('close');
+    score++;
+  } else if (diffPct < 15) {
+    msg = 'Almost there.'; cls = 'close';
+    beam.classList.add('close');
+  } else {
+    msg = 'Off balance.'; cls = 'far';
+    beam.classList.add('far');
+  }
+
+  resultMsg.textContent = msg;
+  resultMsg.className = `result-msg animate-in ${cls}`;
+  resultMeta.innerHTML = `Your guess: ${userVal.toFixed(1)}<br>Actual mean: ${currentDist.mean.toFixed(1)}<br>Error: ${diffPct.toFixed(1)}%`;
+
+  document.getElementById('score').textContent = score;
+  document.getElementById('total').textContent = total;
+}
+
+slider.addEventListener('input', () => {
+  if (!answered) updateSliderUI();
+});
+
+slider.addEventListener('mousedown', () => thumb.classList.add('active'));
+slider.addEventListener('touchstart', () => thumb.classList.add('active'));
+slider.addEventListener('mouseup', () => thumb.classList.remove('active'));
+slider.addEventListener('touchend', () => thumb.classList.remove('active'));
+
+window.addEventListener('resize', () => {
+  if (currentDist) drawHistogram(currentDist);
+});
+
+newDistribution();
+</script>
+</body>
+</html>
