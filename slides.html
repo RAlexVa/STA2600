@@ -646,6 +646,7 @@ slides.forEach((_, i) => {
 function goTo(n) {
   slides[current].classList.remove('active');
   dotsEl.children[current].classList.remove('active');
+  stopAnimations();
   current = Math.max(0, Math.min(total - 1, n));
   slides[current].classList.add('active');
   dotsEl.children[current].classList.add('active');
@@ -761,93 +762,172 @@ function getSharedData() {
   return sharedData;
 }
 
-function drawMean() {
-  const data = getSharedData();
-  const mean = data.reduce((a,b) => a+b, 0) / data.length;
-  const c = document.getElementById('c-mean');
-  c.width = c.offsetWidth || 400;
-  drawDotPlot(c, data, {
+// ---- Animation state ----
+let meanAnimId = null;
+let medianAnimId = null;
+
+// ---- Shared drawing helpers ----
+function renderMeanFrame(canvas, balanceCanvas, visibleData) {
+  const mean = visibleData.length
+    ? visibleData.reduce((a,b) => a+b, 0) / visibleData.length
+    : 50;
+
+  canvas.width = canvas.offsetWidth || 400;
+  drawDotPlot(canvas, visibleData, {
     min:0, max:100, radius:5,
     colorFn: () => 'rgba(96,200,240,0.8)',
-    lines: [{value: mean, color: '#60c8f0', label: 'x̄'}]
+    lines: visibleData.length ? [{value: mean, color: '#60c8f0', label: 'x̄'}] : []
   });
 
-  // Draw seesaw balance
-  const cb = document.getElementById('c-balance');
-  cb.width = cb.offsetWidth || 400;
-  const W = cb.width;
-  const H = cb.height;
-  const ctx = cb.getContext('2d');
+  balanceCanvas.width = balanceCanvas.offsetWidth || 400;
+  const W = balanceCanvas.width;
+  const H = balanceCanvas.height;
+  const ctx = balanceCanvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
-
   const PAD = 10;
   const plotW = W - 2 * PAD;
   const pivotX = PAD + (mean / 100) * plotW;
   const beamY = H * 0.30;
-  const beamLen = plotW;
-  const beamLeft  = PAD;
-  const beamRight = PAD + beamLen;
-
-  // Beam
   ctx.beginPath();
-  ctx.moveTo(beamLeft, beamY);
-  ctx.lineTo(beamRight, beamY);
+  ctx.moveTo(PAD, beamY);
+  ctx.lineTo(PAD + plotW, beamY);
   ctx.strokeStyle = '#60c8f0';
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
+  ctx.lineWidth = 3; ctx.lineCap = 'round';
   ctx.stroke();
-
-  // Tick marks along beam for each data point
-  data.forEach(v => {
+  visibleData.forEach(v => {
     const x = PAD + (v / 100) * plotW;
-    ctx.beginPath();
-    ctx.moveTo(x, beamY - 5);
-    ctx.lineTo(x, beamY + 5);
-    ctx.strokeStyle = 'rgba(96,200,240,0.45)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, beamY - 5); ctx.lineTo(x, beamY + 5);
+    ctx.strokeStyle = 'rgba(96,200,240,0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
   });
-
-  // Pivot triangle (fulcrum)
-  const triH = 18;
-  const triW = 20;
-  ctx.beginPath();
-  ctx.moveTo(pivotX, beamY);
-  ctx.lineTo(pivotX - triW / 2, beamY + triH);
-  ctx.lineTo(pivotX + triW / 2, beamY + triH);
-  ctx.closePath();
-  ctx.fillStyle = '#60c8f0';
-  ctx.fill();
-
-  // Base line
-  ctx.beginPath();
-  ctx.moveTo(pivotX - triW / 2 - 4, beamY + triH);
-  ctx.lineTo(pivotX + triW / 2 + 4, beamY + triH);
-  ctx.strokeStyle = '#60c8f0';
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-  ctx.stroke();
-
-  // x̄ label below pivot
-  ctx.font = "bold 11px 'Space Mono', monospace";
-  ctx.fillStyle = '#60c8f0';
-  ctx.textAlign = 'center';
-  ctx.fillText('x̄', pivotX, beamY + triH + 14);
+  if (visibleData.length) {
+    const triH = 18, triW = 20;
+    ctx.beginPath();
+    ctx.moveTo(pivotX, beamY);
+    ctx.lineTo(pivotX - triW/2, beamY + triH);
+    ctx.lineTo(pivotX + triW/2, beamY + triH);
+    ctx.closePath(); ctx.fillStyle = '#60c8f0'; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(pivotX - triW/2 - 4, beamY + triH);
+    ctx.lineTo(pivotX + triW/2 + 4, beamY + triH);
+    ctx.strokeStyle = '#60c8f0'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.stroke();
+    ctx.font = "bold 11px 'Space Mono', monospace";
+    ctx.fillStyle = '#60c8f0'; ctx.textAlign = 'center';
+    ctx.fillText('x̄', pivotX, beamY + triH + 14);
+  }
 }
 
-// ---- Slide 4: Median ----
-function drawMedian() {
-  const data = getSharedData();
-  const sorted = [...data].sort((a,b) => a-b);
+function renderMedianFrame(canvas, visibleData) {
+  const sorted = [...visibleData].sort((a,b) => a-b);
   const n = sorted.length;
-  const med = n % 2 === 0 ? (sorted[n/2-1]+sorted[n/2])/2 : sorted[Math.floor(n/2)];
-  const c = document.getElementById('c-median');
-  c.width = c.offsetWidth || 400;
-  drawDotPlot(c, data, {
+  const med = n === 0 ? 50
+    : n % 2 === 0 ? (sorted[n/2-1]+sorted[n/2])/2
+    : sorted[Math.floor(n/2)];
+  canvas.width = canvas.offsetWidth || 400;
+  drawDotPlot(canvas, visibleData, {
     min:0, max:100, radius:5,
     colorFn: v => v < med ? 'rgba(96,200,240,0.8)' : 'rgba(232,96,96,0.8)',
-    lines: [{value: med, color: '#f0c040', label: 'M'}]
+    lines: visibleData.length ? [{value: med, color: '#f0c040', label: 'M'}] : []
   });
+}
+
+// ---- Slide 4: Mean animation ----
+// Strategy: start with base cluster, then drop 5 high-value outlier points
+// one every 5 seconds (total 25s), then reset after a pause.
+function drawMean() {
+  if (meanAnimId) { clearTimeout(meanAnimId); meanAnimId = null; }
+
+  const base = getSharedData(); // skewed-right cluster, ~70 pts
+  // 5 outlier points placed far to the right of the current mean
+  const baseMean = base.reduce((a,b) => a+b,0) / base.length;
+  const outliers = [
+    clamp(baseMean + 35, 70, 97),
+    clamp(baseMean + 42, 72, 98),
+    clamp(baseMean + 28, 65, 95),
+    clamp(baseMean + 50, 75, 99),
+    clamp(baseMean + 38, 68, 96),
+    clamp(baseMean + 45, 73, 97),
+    clamp(baseMean + 32, 67, 94),
+    clamp(baseMean + 55, 78, 99),
+    clamp(baseMean + 40, 71, 96),
+    clamp(baseMean + 48, 74, 98)
+  ];
+
+  const c  = document.getElementById('c-mean');
+  const cb = document.getElementById('c-balance');
+
+  // Render initial state (all base points, no outliers)
+  renderMeanFrame(c, cb, [...base]);
+
+  let step = 0;
+  function dropOutlier() {
+    step++;
+    const visible = [...base, ...outliers.slice(0, step)];
+    renderMeanFrame(c, cb, visible);
+    if (step < outliers.length) {
+      meanAnimId = setTimeout(dropOutlier, 1000);
+    } else {
+      // All 10 dropped — pause 2s then restart from scratch
+      meanAnimId = setTimeout(() => {
+        step = 0;
+        renderMeanFrame(c, cb, [...base]);
+        meanAnimId = setTimeout(dropOutlier, 1000);
+      }, 2000);
+    }
+  }
+  meanAnimId = setTimeout(dropOutlier, 1000);
+}
+
+// ---- Slide 5: Median animation ----
+function drawMedian() {
+  if (medianAnimId) { clearTimeout(medianAnimId); medianAnimId = null; }
+
+  const base = getSharedData();
+  // Compute current median, then place 5 outliers far to the right
+  const sortedBase = [...base].sort((a,b)=>a-b);
+  const n = sortedBase.length;
+  const baseMed = n % 2 === 0
+    ? (sortedBase[n/2-1]+sortedBase[n/2])/2
+    : sortedBase[Math.floor(n/2)];
+
+  const outliers = [
+    clamp(baseMed + 40, 72, 97),
+    clamp(baseMed + 48, 75, 98),
+    clamp(baseMed + 33, 68, 95),
+    clamp(baseMed + 55, 78, 99),
+    clamp(baseMed + 44, 73, 96),
+    clamp(baseMed + 50, 76, 97),
+    clamp(baseMed + 37, 70, 94),
+    clamp(baseMed + 58, 80, 99),
+    clamp(baseMed + 42, 72, 96),
+    clamp(baseMed + 52, 77, 98)
+  ];
+
+  const c = document.getElementById('c-median');
+
+  renderMedianFrame(c, [...base]);
+
+  let step = 0;
+  function dropOutlier() {
+    step++;
+    const visible = [...base, ...outliers.slice(0, step)];
+    renderMedianFrame(c, visible);
+    if (step < outliers.length) {
+      medianAnimId = setTimeout(dropOutlier, 1000);
+    } else {
+      medianAnimId = setTimeout(() => {
+        step = 0;
+        renderMedianFrame(c, [...base]);
+        medianAnimId = setTimeout(dropOutlier, 1000);
+      }, 2000);
+    }
+  }
+  medianAnimId = setTimeout(dropOutlier, 1000);
+}
+
+// Stop animations when leaving those slides
+function stopAnimations() {
+  if (meanAnimId)   { clearTimeout(meanAnimId);   meanAnimId   = null; }
+  if (medianAnimId) { clearTimeout(medianAnimId); medianAnimId = null; }
 }
 
 // ---- Slide 6: Outlier comparison ----
