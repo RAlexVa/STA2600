@@ -417,16 +417,28 @@
 <div class="deck">
 
   <!-- ======= SLIDE 1: Opening Question ======= -->
+  <!-- ======= SLIDE 0: Title ======= -->
   <div class="slide active" id="slide-0">
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:20px;position:relative;z-index:1;">
+      <div class="anim-1" style="font-size:0.62rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--accent2);">Interactive Lecture</div>
+      <h1 class="anim-2" style="font-family:'Syne',sans-serif;font-size:clamp(2rem,5vw,3.8rem);font-weight:900;letter-spacing:-0.04em;line-height:1.1;max-width:700px;">
+        Intro to Measures of<br><span style="color:var(--accent)">Central Tendency</span>
+      </h1>
+      <div class="anim-3" style="font-size:0.8rem;color:var(--muted);letter-spacing:0.04em;">for non-statisticians</div>
+    </div>
+  </div>
+
+  <!-- ======= SLIDE 1: Opening Question ======= -->
+  <div class="slide" id="slide-1-q">
     <p class="s1-eyebrow anim-1">Think about this...</p>
-    <h2 class="s1-question anim-2">For these two distributions,<br>where are the <em>mean</em> and <em>median</em>?<br>Are they in the same place?</h2>
+    <h2 class="s1-question anim-2">For these two histograms, can you identify<br>where is the <em>"center"</em> of the data?<br>Do both of them have it in the same place?</h2>
     <div class="dist-compare anim-3">
       <div class="dist-box">
-        <div class="dist-label">Distribution A</div>
+        <div class="dist-label">Histogram A</div>
         <canvas id="c-sym" width="260" height="120"></canvas>
       </div>
       <div class="dist-box">
-        <div class="dist-label">Distribution B</div>
+        <div class="dist-label">Histogram B</div>
         <canvas id="c-skew" width="260" height="120"></canvas>
       </div>
     </div>
@@ -467,9 +479,10 @@
       <div class="concept-visual anim-3">
         <div class="concept-canvas-wrap">
           <canvas id="c-mean" height="160"></canvas>
+          <canvas id="c-balance" height="54" style="display:block;width:100%;margin-top:0;"></canvas>
           <div class="canvas-legend">
             <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>Data points</div>
-            <div class="legend-item"><div class="legend-line" style="background:var(--accent2)"></div>Mean</div>
+            <div class="legend-item"><div class="legend-line" style="background:var(--accent2)"></div>Mean (balance point)</div>
           </div>
         </div>
       </div>
@@ -539,21 +552,20 @@
   <!-- ======= SLIDE 6: Outlier Question ======= -->
   <div class="slide" id="slide-5">
     <div style="width:100%;max-width:900px;display:flex;flex-direction:column;align-items:center;gap:24px;">
-      <p class="s1-eyebrow anim-1">Think about this...</p>
-      <h2 class="s1-question anim-2" style="margin-bottom:0;font-size:clamp(1.3rem,2.8vw,2rem);">
-        Both distributions show the same data.<br>Which one has a <em>higher mean</em>?
+      <h2 class="s1-question anim-1" style="margin-bottom:0;font-size:clamp(1.3rem,2.8vw,2rem);">
+        Both distributions have the same number of datapoints.<br>Which one has a <em>higher mean</em>?
       </h2>
-      <div class="dist-compare anim-3" style="width:100%;justify-content:center;gap:24px;">
+      <div class="dist-compare anim-2" style="width:100%;justify-content:center;gap:24px;">
         <div class="dist-box" style="flex:1;min-width:280px;">
-          <div class="dist-label">Distribution A</div>
-          <canvas id="c-outlier" width="340" height="130"></canvas>
+          <div class="dist-label">Histogram A</div>
+          <canvas id="c-no-outlier" width="340" height="130"></canvas>
           <div class="canvas-legend" style="margin-top:8px;">
             <div class="legend-item"><div class="legend-line" style="background:var(--accent)"></div>Median</div>
           </div>
         </div>
         <div class="dist-box" style="flex:1;min-width:280px;">
-          <div class="dist-label">Distribution B</div>
-          <canvas id="c-no-outlier" width="340" height="130"></canvas>
+          <div class="dist-label">Histogram B</div>
+          <canvas id="c-outlier" width="340" height="130"></canvas>
           <div class="canvas-legend" style="margin-top:8px;">
             <div class="legend-item"><div class="legend-line" style="background:var(--accent)"></div>Median</div>
           </div>
@@ -608,7 +620,7 @@
 <div class="nav">
   <button id="btnPrev" disabled>←</button>
   <div class="dots" id="dots"></div>
-  <span class="slide-counter" id="counter">1 / 6</span>
+  <span class="slide-counter" id="counter">1 / 8</span>
   <button id="btnNext">→</button>
 </div>
 
@@ -640,9 +652,9 @@ function goTo(n) {
   counter.textContent = (current + 1) + ' / ' + total;
   btnPrev.disabled = current === 0;
   btnNext.disabled = current === total - 1;
-  if (current === 2) drawMean();
-  if (current === 3) drawMedian();
-  if (current === 5) drawSlide6();
+  if (current === 3) drawMean();
+  if (current === 4) drawMedian();
+  if (current === 6) drawSlide6();
 }
 
 btnPrev.addEventListener('click', () => goTo(current - 1));
@@ -740,7 +752,11 @@ function drawSlide1() {
 let sharedData = [];
 function getSharedData() {
   if (!sharedData.length) {
-    sharedData = Array.from({length:70}, () => clamp(normalSample(50, 14), 5, 90));
+    // Skewed right: bulk of data 15-45, long tail to the right
+    sharedData = Array.from({length:70}, () => {
+      const v = Math.abs(normalSample(0,1));
+      return clamp(v * v * 18 + 12, 5, 95);
+    });
   }
   return sharedData;
 }
@@ -753,8 +769,70 @@ function drawMean() {
   drawDotPlot(c, data, {
     min:0, max:100, radius:5,
     colorFn: () => 'rgba(96,200,240,0.8)',
-    lines: [{value: mean, color: 'var(--accent2)', label: 'x̄'}]
+    lines: [{value: mean, color: '#60c8f0', label: 'x̄'}]
   });
+
+  // Draw seesaw balance
+  const cb = document.getElementById('c-balance');
+  cb.width = cb.offsetWidth || 400;
+  const W = cb.width;
+  const H = cb.height;
+  const ctx = cb.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const PAD = 10;
+  const plotW = W - 2 * PAD;
+  const pivotX = PAD + (mean / 100) * plotW;
+  const beamY = H * 0.30;
+  const beamLen = plotW;
+  const beamLeft  = PAD;
+  const beamRight = PAD + beamLen;
+
+  // Beam
+  ctx.beginPath();
+  ctx.moveTo(beamLeft, beamY);
+  ctx.lineTo(beamRight, beamY);
+  ctx.strokeStyle = '#60c8f0';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // Tick marks along beam for each data point
+  data.forEach(v => {
+    const x = PAD + (v / 100) * plotW;
+    ctx.beginPath();
+    ctx.moveTo(x, beamY - 5);
+    ctx.lineTo(x, beamY + 5);
+    ctx.strokeStyle = 'rgba(96,200,240,0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  // Pivot triangle (fulcrum)
+  const triH = 18;
+  const triW = 20;
+  ctx.beginPath();
+  ctx.moveTo(pivotX, beamY);
+  ctx.lineTo(pivotX - triW / 2, beamY + triH);
+  ctx.lineTo(pivotX + triW / 2, beamY + triH);
+  ctx.closePath();
+  ctx.fillStyle = '#60c8f0';
+  ctx.fill();
+
+  // Base line
+  ctx.beginPath();
+  ctx.moveTo(pivotX - triW / 2 - 4, beamY + triH);
+  ctx.lineTo(pivotX + triW / 2 + 4, beamY + triH);
+  ctx.strokeStyle = '#60c8f0';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // x̄ label below pivot
+  ctx.font = "bold 11px 'Space Mono', monospace";
+  ctx.fillStyle = '#60c8f0';
+  ctx.textAlign = 'center';
+  ctx.fillText('x̄', pivotX, beamY + triH + 14);
 }
 
 // ---- Slide 4: Median ----
@@ -768,7 +846,7 @@ function drawMedian() {
   drawDotPlot(c, data, {
     min:0, max:100, radius:5,
     colorFn: v => v < med ? 'rgba(96,200,240,0.8)' : 'rgba(232,96,96,0.8)',
-    lines: [{value: med, color: 'var(--accent)', label: 'M'}]
+    lines: [{value: med, color: '#f0c040', label: 'M'}]
   });
 }
 
@@ -776,9 +854,9 @@ function drawMedian() {
 let baseData = [];
 function drawSlide6() {
   if (!baseData.length) {
-    baseData = Array.from({length:55}, () => clamp(normalSample(40, 10), 5, 65));
+    // Compact symmetric cluster 25-55
+    baseData = Array.from({length:50}, () => clamp(normalSample(40, 8), 20, 60));
   }
-  const withOutlier = [...baseData, 95, 97, 94]; // 3 very visible outliers on the right
 
   function getMedian(arr) {
     const s = [...arr].sort((a,b) => a-b);
@@ -786,24 +864,39 @@ function drawSlide6() {
     return n % 2 === 0 ? (s[n/2-1]+s[n/2])/2 : s[Math.floor(n/2)];
   }
 
-  const medA = getMedian(withOutlier);
   const medB = getMedian(baseData);
+
+  // Build outlier version: start from baseData, remove ~8 blue points that
+  // fall just to the right of the median so the gap before the outliers is clear
+  const rightOfMedian = baseData
+    .map((v, i) => ({v, i}))
+    .filter(x => x.v > medB && x.v < medB + 18)
+    .sort((a, b) => a.v - b.v)
+    .slice(0, 8)
+    .map(x => x.i);
+
+  const trimmedBase = baseData.filter((_, i) => !rightOfMedian.includes(i));
+  const withOutlier = [...trimmedBase, 88, 91, 93, 90]; // vivid red outliers far right
+
+  const medA = getMedian(withOutlier);
 
   const cA = document.getElementById('c-outlier');
   const cB = document.getElementById('c-no-outlier');
   cA.width = cA.offsetWidth || 340;
   cB.width = cB.offsetWidth || 340;
 
-  drawDotPlot(cA, withOutlier, {
-    min:0, max:100, radius:5,
-    colorFn: v => v > 80 ? 'rgba(240,100,60,0.95)' : 'rgba(96,200,240,0.8)',
-    lines: [{value: medA, color: 'var(--accent)', label: 'M'}]
-  });
-
+  // Histogram B (no outlier) — all blue
   drawDotPlot(cB, baseData, {
     min:0, max:100, radius:5,
     colorFn: () => 'rgba(96,200,240,0.8)',
-    lines: [{value: medB, color: 'var(--accent)', label: 'M'}]
+    lines: [{value: medB, color: '#f0c040', label: 'M'}]
+  });
+
+  // Histogram A (with outlier) — gap then red outliers
+  drawDotPlot(cA, withOutlier, {
+    min:0, max:100, radius:5,
+    colorFn: v => v > 80 ? 'rgba(240,100,60,0.95)' : 'rgba(96,200,240,0.8)',
+    lines: [{value: medA, color: '#f0c040', label: 'M'}]
   });
 }
 
@@ -814,9 +907,9 @@ window.addEventListener('load', () => {
 
 window.addEventListener('resize', () => {
   drawSlide1();
-  if (current === 2) drawMean();
-  if (current === 3) drawMedian();
-  if (current === 5) drawSlide6();
+  if (current === 3) drawMean();
+  if (current === 4) drawMedian();
+  if (current === 6) drawSlide6();
 });
 </script>
 </body>
