@@ -611,6 +611,35 @@
         </div>
 
       </div>
+
+      <!-- Mini animations row -->
+      <div style="display:flex;gap:20px;width:100%;flex-wrap:wrap;" class="anim-4">
+
+        <!-- Mean mini animation -->
+        <div style="flex:1;min-width:240px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 16px 8px;">
+          <div style="font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent2);margin-bottom:8px;">Mean — balance point moves</div>
+          <canvas id="c-summary-mean" height="120" style="display:block;width:100%;"></canvas>
+          <canvas id="c-summary-balance" height="44" style="display:block;width:100%;margin-top:0;"></canvas>
+          <div class="canvas-legend" style="margin-top:6px;margin-bottom:4px;">
+            <div class="legend-item"><div class="legend-dot" style="background:#60c8f0"></div>Data</div>
+            <div class="legend-item"><div class="legend-line" style="background:#60c8f0"></div>x̄</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:center;color:var(--border);font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:900;padding:0 4px;">vs</div>
+
+        <!-- Median mini animation -->
+        <div style="flex:1;min-width:240px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 16px 8px;">
+          <div style="font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;">Median — middle stays stable</div>
+          <canvas id="c-summary-median" height="120" style="display:block;width:100%;"></canvas>
+          <div class="canvas-legend" style="margin-top:6px;margin-bottom:4px;">
+            <div class="legend-item"><div class="legend-dot" style="background:#60c8f0"></div>Left</div>
+            <div class="legend-item"><div class="legend-dot" style="background:rgba(232,96,96,0.8)"></div>Right</div>
+            <div class="legend-item"><div class="legend-line" style="background:#f0c040"></div>M</div>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 
@@ -656,6 +685,7 @@ function goTo(n) {
   if (current === 3) drawMean();
   if (current === 4) drawMedian();
   if (current === 6) drawSlide6();
+  if (current === 7) drawSummaryAnims();
 }
 
 btnPrev.addEventListener('click', () => goTo(current - 1));
@@ -765,6 +795,8 @@ function getSharedData() {
 // ---- Animation state ----
 let meanAnimId = null;
 let medianAnimId = null;
+let summaryMeanAnimId = null;
+let summaryMedianAnimId = null;
 
 // ---- Shared drawing helpers ----
 function renderMeanFrame(canvas, balanceCanvas, visibleData) {
@@ -926,8 +958,67 @@ function drawMedian() {
 
 // Stop animations when leaving those slides
 function stopAnimations() {
-  if (meanAnimId)   { clearTimeout(meanAnimId);   meanAnimId   = null; }
-  if (medianAnimId) { clearTimeout(medianAnimId); medianAnimId = null; }
+  if (meanAnimId)         { clearTimeout(meanAnimId);         meanAnimId         = null; }
+  if (medianAnimId)       { clearTimeout(medianAnimId);       medianAnimId       = null; }
+  if (summaryMeanAnimId)  { clearTimeout(summaryMeanAnimId);  summaryMeanAnimId  = null; }
+  if (summaryMedianAnimId){ clearTimeout(summaryMedianAnimId);summaryMedianAnimId= null; }
+}
+
+// ---- Slide 8 (Summary): Mini mean + median animations ----
+function drawSummaryAnims() {
+  if (summaryMeanAnimId)  { clearTimeout(summaryMeanAnimId);  summaryMeanAnimId  = null; }
+  if (summaryMedianAnimId){ clearTimeout(summaryMedianAnimId);summaryMedianAnimId= null; }
+
+  const base = getSharedData();
+  const baseMean = base.reduce((a,b)=>a+b,0)/base.length;
+  const sortedB  = [...base].sort((a,b)=>a-b);
+  const nb = sortedB.length;
+  const baseMed  = nb%2===0?(sortedB[nb/2-1]+sortedB[nb/2])/2:sortedB[Math.floor(nb/2)];
+
+  const meanOutliers = [
+    clamp(baseMean+35,70,97), clamp(baseMean+42,72,98), clamp(baseMean+28,65,95),
+    clamp(baseMean+50,75,99), clamp(baseMean+38,68,96), clamp(baseMean+45,73,97),
+    clamp(baseMean+32,67,94), clamp(baseMean+55,78,99), clamp(baseMean+40,71,96),
+    clamp(baseMean+48,74,98)
+  ];
+  const medOutliers = [
+    clamp(baseMed+40,72,97), clamp(baseMed+48,75,98), clamp(baseMed+33,68,95),
+    clamp(baseMed+55,78,99), clamp(baseMed+44,73,96), clamp(baseMed+50,76,97),
+    clamp(baseMed+37,70,94), clamp(baseMed+58,80,99), clamp(baseMed+42,72,96),
+    clamp(baseMed+52,77,98)
+  ];
+
+  const cMean = document.getElementById('c-summary-mean');
+  const cBal  = document.getElementById('c-summary-balance');
+  const cMed  = document.getElementById('c-summary-median');
+
+  // — Mean animation —
+  let mStep = 0;
+  function dropMean() {
+    mStep++;
+    renderMeanFrame(cMean, cBal, [...base, ...meanOutliers.slice(0, mStep)]);
+    if (mStep < meanOutliers.length) {
+      summaryMeanAnimId = setTimeout(dropMean, 1000);
+    } else {
+      summaryMeanAnimId = setTimeout(() => { mStep = 0; renderMeanFrame(cMean, cBal, [...base]); summaryMeanAnimId = setTimeout(dropMean, 1000); }, 2000);
+    }
+  }
+  renderMeanFrame(cMean, cBal, [...base]);
+  summaryMeanAnimId = setTimeout(dropMean, 1000);
+
+  // — Median animation —
+  let dStep = 0;
+  function dropMedian() {
+    dStep++;
+    renderMedianFrame(cMed, [...base, ...medOutliers.slice(0, dStep)]);
+    if (dStep < medOutliers.length) {
+      summaryMedianAnimId = setTimeout(dropMedian, 1000);
+    } else {
+      summaryMedianAnimId = setTimeout(() => { dStep = 0; renderMedianFrame(cMed, [...base]); summaryMedianAnimId = setTimeout(dropMedian, 1000); }, 2000);
+    }
+  }
+  renderMedianFrame(cMed, [...base]);
+  summaryMedianAnimId = setTimeout(dropMedian, 1000);
 }
 
 // ---- Slide 6: Outlier comparison ----
@@ -990,6 +1081,7 @@ window.addEventListener('resize', () => {
   if (current === 3) drawMean();
   if (current === 4) drawMedian();
   if (current === 6) drawSlide6();
+  if (current === 7) drawSummaryAnims();
 });
 </script>
 </body>
